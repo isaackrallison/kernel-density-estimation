@@ -1,0 +1,1762 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kernel Density Lab</title>
+<meta name="description" content="Interactive study guide for §16.3 of Murphy's Probabilistic Machine Learning: density kernels, the Parzen window (kernel density) estimator, choosing the bandwidth, deriving KNN from KDE, Nadaraya-Watson kernel regression, its predictive variance, and locally weighted regression (LOWESS). Explanations at four levels, from elementary school to grad-level ML.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<script>
+window.MathJax = {
+  loader: { load: ['[tex]/html'] },
+  tex: { packages: { '[+]': ['html'] }, inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  svg: { fontCache: 'global' },
+  options: { enableMenu: false }
+};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js" async></script>
+<style>
+/* Layout: sticky chapter rail + one reading column; every section runs Explain it → Play → Math, slowly → Check yourself */
+:root {
+  --bg: #f3f1ec; --surface: #ffffff; --sunk: #e9e5dc; --ink: #1d1b18; --muted: #5f5a52; --rule: #d9d3c6;
+  --c0: #c0392b; --c1: #1f5fa8; --c2: #1d7a49; --c3: #a35d00; --c4: #6a3fc1; --c5: #0f7f86; --c6: #b0377f; --c7: #6b6b2a;
+  --gap: #a35d00; --mi: #6a3fc1; --green: #1d7a49; --red: #c0392b;
+  --c0-soft: rgba(192,57,43,.13); --c1-soft: rgba(31,95,168,.14); --c2-soft: rgba(29,122,73,.14); --gap-soft: rgba(163,93,0,.16); --mi-soft: rgba(106,63,193,.14); --green-soft: rgba(29,122,73,.14); --red-soft: rgba(192,57,43,.13);
+  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12110f; --surface: #1b1a17; --sunk: #25231f; --ink: #ece7de; --muted: #a59e92; --rule: #35322c;
+    --c0: #f0776a; --c1: #6ea8ec; --c2: #52c48a; --c3: #e2a34b; --c4: #b393f2; --c5: #4cc4cc; --c6: #ea7fbf; --c7: #c2c26a;
+    --gap: #e2a34b; --mi: #b393f2; --green: #52c48a; --red: #f0776a;
+    --c0-soft: rgba(240,119,106,.18); --c1-soft: rgba(110,168,236,.18); --c2-soft: rgba(82,196,138,.16); --gap-soft: rgba(226,163,75,.2); --mi-soft: rgba(179,147,242,.2); --green-soft: rgba(82,196,138,.16); --red-soft: rgba(240,119,106,.18);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12110f; --surface: #1b1a17; --sunk: #25231f; --ink: #ece7de; --muted: #a59e92; --rule: #35322c;
+  --c0: #f0776a; --c1: #6ea8ec; --c2: #52c48a; --c3: #e2a34b; --c4: #b393f2; --c5: #4cc4cc; --c6: #ea7fbf; --c7: #c2c26a;
+  --gap: #e2a34b; --mi: #b393f2; --green: #52c48a; --red: #f0776a;
+  --c0-soft: rgba(240,119,106,.18); --c1-soft: rgba(110,168,236,.18); --c2-soft: rgba(82,196,138,.16); --gap-soft: rgba(226,163,75,.2); --mi-soft: rgba(179,147,242,.2); --green-soft: rgba(82,196,138,.16); --red-soft: rgba(240,119,106,.18);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { scroll-behavior: smooth; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.6; margin: 0; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 0 80px; display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 48px; }
+@media (max-width: 900px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 0; padding-inline: 16px; } .rail { display: none; } }
+
+/* top bar */
+.topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); border-bottom: 1px solid var(--rule); }
+.topbar-in { max-width: 1180px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 14px; }
+.brand { font-family: var(--display); font-weight: 800; font-size: 17px; letter-spacing: -.01em; white-space: nowrap; }
+.brand span { color: var(--mi); }
+.chips { display: none; overflow-x: auto; gap: 6px; flex: 1; min-width: 0; scrollbar-width: none; }
+.chips a { font-family: var(--mono); font-size: 12px; white-space: nowrap; padding: 4px 9px; border: 1px solid var(--rule); border-radius: 99px; color: var(--ink); text-decoration: none; }
+@media (max-width: 900px) { .chips { display: flex; } .topbar-in { padding: 10px 16px; flex-wrap: wrap; row-gap: 8px; } .brand { display: none; } }
+.tb-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.score { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; padding: 5px 10px; border-radius: 99px; background: var(--surface); border: 1px solid var(--rule); }
+.score b { color: var(--green); }
+.lvpick { display: inline-flex; border: 1px solid var(--rule); border-radius: 99px; overflow: hidden; background: var(--surface); }
+.lvpick button { font-family: var(--mono); font-size: 11.5px; padding: 5px 9px; border: 0; background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.lvpick button.on { background: var(--mi); color: #fff; }
+@media (max-width: 900px) { .tb-right { margin-left: 0; width: 100%; justify-content: space-between; } }
+
+/* rail */
+.rail nav { position: sticky; top: 70px; padding-top: 40px; display: flex; flex-direction: column; gap: 2px; }
+.rail a { display: grid; grid-template-columns: 70px 1fr; gap: 4px; padding: 6px 8px; border-radius: 6px; color: var(--muted); text-decoration: none; font-family: var(--display); font-size: 14.5px; line-height: 1.3; }
+.rail a .n { font-family: var(--mono); font-size: 11.5px; padding-top: 2px; }
+.rail a:hover, .rail a.on { color: var(--ink); background: var(--sunk); }
+
+main { min-width: 0; }
+header.hero { padding-block: 48px 28px; border-bottom: 1px solid var(--rule); }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(34px, 5.5vw, 58px); line-height: 1.02; letter-spacing: -.025em; margin: 10px 0 16px; text-wrap: balance; }
+h1 .m { color: var(--mi); }
+.lede { max-width: 66ch; color: var(--muted); font-size: 18px; margin: 0 0 12px; }
+.levelcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 24px; }
+@media (max-width: 760px) { .levelcards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.levelcards button { text-align: left; font-family: var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 14px; cursor: pointer; }
+.levelcards button b { display: block; font-family: var(--display); font-size: 17px; }
+.levelcards button span { font-size: 14px; color: var(--muted); line-height: 1.35; display: block; margin-top: 2px; }
+.levelcards button.on { border-color: var(--mi); box-shadow: inset 0 0 0 1.5px var(--mi); background: var(--mi-soft); }
+.legend3 { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 22px; font-family: var(--mono); font-size: 12.5px; }
+.legend3 span { display: inline-flex; align-items: center; gap: 8px; }
+.legend3 i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+section.sec { padding-block: 56px 8px; border-bottom: 1px solid var(--rule); scroll-margin-top: 60px; }
+.sec-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.secnum { font-family: var(--mono); font-size: 13px; color: var(--mi); border: 1px solid currentColor; border-radius: 4px; padding: 1px 7px; }
+h2 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 3.4vw, 36px); line-height: 1.1; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.intro { max-width: 66ch; }
+.intro p { margin: 12px 0; }
+
+.block { margin-top: 28px; }
+.blabel { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+.blabel::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+.blabel .tag { color: var(--surface); background: var(--ink); padding: 2px 7px; border-radius: 3px; letter-spacing: .06em; }
+.block.math .blabel .tag { background: var(--c1); }
+.block.quiz .blabel .tag { background: var(--green); }
+.block.play .blabel .tag { background: var(--mi); }
+.block.lv .blabel .tag { background: var(--gap); }
+
+/* level explanations */
+.lvcard { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 0; overflow: hidden; }
+.lvtabs { display: flex; border-bottom: 1px solid var(--rule); background: var(--sunk); overflow-x: auto; scrollbar-width: none; }
+.lvtabs button { font-family: var(--mono); font-size: 12px; padding: 9px 14px; border: 0; border-right: 1px solid var(--rule); background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.lvtabs button.on { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--mi); }
+.lvbody { padding: 6px 20px 14px; }
+.lvbody > div { max-width: 68ch; }
+.lvbody p, .lvbody li { margin: 10px 0; }
+.lvbody ul, .lvbody ol { padding-left: 22px; }
+.lvbody .big { font-size: 19px; }
+
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 18px; }
+.panel + .panel { margin-top: 16px; }
+.panel h4 { font-family: var(--display); font-weight: 700; font-size: 18px; margin: 0 0 4px; }
+.hint { font-size: 14.5px; color: var(--muted); margin: 0 0 12px; }
+.two { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+.two-even { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+@media (max-width: 760px) { .two, .two-even { grid-template-columns: minmax(0, 1fr); } }
+.cap { font-family: var(--mono); font-size: 12px; color: var(--muted); margin: 0 0 4px; }
+
+svg.plot { width: 100%; height: auto; display: block; overflow: visible; touch-action: none; user-select: none; -webkit-user-select: none; }
+svg.drag { cursor: crosshair; }
+svg:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--mi); outline-offset: 2px; }
+.ax { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+.axl { font-family: var(--mono); font-size: 11.5px; fill: var(--ink); }
+.lbl { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+.gridl { stroke: var(--rule); stroke-width: 1; }
+.base { stroke: var(--muted); stroke-width: 1; }
+.handle { cursor: grab; }
+
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 14px; }
+.stat { background: var(--sunk); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.stat .k { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.stat .v { font-family: var(--display); font-weight: 700; font-size: 23px; font-variant-numeric: tabular-nums; line-height: 1.15; overflow-wrap: anywhere; }
+.stat.r .v { color: var(--red); } .stat.b .v { color: var(--c1); } .stat.a .v { color: var(--gap); } .stat.g .v { color: var(--green); } .stat.m .v { color: var(--mi); }
+.chain { font-family: var(--mono); font-size: 13px; background: var(--sunk); border-radius: 8px; padding: 10px 14px; margin-top: 12px; line-height: 1.8; overflow-x: auto; }
+.chain .ok { color: var(--green); font-weight: 600; } .chain .bad { color: var(--red); font-weight: 600; } .chain .a { color: var(--gap); font-weight: 600; } .chain .mu { color: var(--muted); } .chain .m { color: var(--mi); font-weight: 600; }
+.verdict { font-family: var(--display); font-weight: 700; font-size: 20px; margin: 12px 0 0; }
+
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+button.b { font-family: var(--mono); font-size: 12.5px; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); cursor: pointer; }
+button.b:hover:not(:disabled) { border-color: var(--ink); }
+button.b:disabled { opacity: .4; cursor: default; }
+button.b.pri { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.btns .sep { width: 1px; align-self: stretch; background: var(--rule); margin: 0 4px; }
+.btns .lab { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+label.chk { font-family: var(--mono); font-size: 12.5px; display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--rule); border-radius: 7px; overflow: hidden; }
+.seg button { font-family: var(--mono); font-size: 12px; padding: 7px 11px; border: 0; border-right: 1px solid var(--rule); background: var(--surface); color: var(--ink); cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button.on { background: var(--mi); color: #fff; }
+
+.ctrl { display: grid; grid-template-columns: 150px minmax(0, 1fr) 64px; align-items: center; gap: 10px; margin: 6px 0; font-family: var(--mono); font-size: 13px; }
+.ctrl label { color: var(--muted); }
+.ctrl output { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 520px) { .ctrl { grid-template-columns: 110px minmax(0, 1fr) 54px; font-size: 12px; } }
+input[type=range] { width: 100%; accent-color: var(--mi); }
+
+/* probability bars */
+.postbars { display: grid; gap: 5px; font-family: var(--mono); font-size: 12px; }
+.postbars .r { display: grid; grid-template-columns: 74px minmax(0, 1fr) 54px; gap: 8px; align-items: center; }
+.postbars .bar { height: 16px; background: var(--sunk); border-radius: 3px; overflow: hidden; }
+.postbars .bar i { display: block; height: 100%; transition: width .2s; }
+.postbars .v { text-align: right; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .postbars .bar i { transition: none; } }
+
+table.t { border-collapse: collapse; width: 100%; font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+table.t th, table.t td { padding: 5px 8px; border-bottom: 1px solid var(--rule); text-align: right; white-space: nowrap; }
+table.t th:first-child, table.t td:first-child { text-align: left; }
+table.t th { color: var(--muted); font-weight: 400; font-size: 11.5px; }
+table.t td.mu { color: var(--muted); }
+table.t.wrap td:first-child { white-space: normal; }
+table.t tr.tot td { border-top: 2px solid var(--rule); font-weight: 600; }
+.scroll { overflow-x: auto; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+
+/* math */
+.mathcard { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 6px 20px 16px; }
+.mathcard + .mathcard { margin-top: 16px; }
+.mathcard h4 { font-family: var(--display); font-weight: 700; font-size: 18px; margin: 16px 0 4px; }
+.mathcard p, .mathcard li { max-width: 68ch; }
+.eq { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+mjx-container[display="true"] { overflow-x: auto; overflow-y: hidden; max-width: 100%; margin: 10px 0 !important; padding: 2px 0; }
+.tr { color: var(--red); } .tb { color: var(--c1); } .ta { color: var(--gap); } .tg { color: var(--green); } .tm { color: var(--mi); }
+.steps { counter-reset: st; list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 4px; }
+.steps > li { counter-increment: st; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 8px; padding: 6px 0; border-top: 1px dashed var(--rule); }
+.steps > li::before { content: counter(st); font-family: var(--mono); font-size: 12px; color: var(--surface); background: var(--c1); border-radius: 50%; width: 22px; height: 22px; display: grid; place-items: center; margin-top: 4px; }
+.steps .why { color: var(--muted); font-size: 15px; }
+.steps > li > div { min-width: 0; }
+.steps > li > div, .lvbody p, .lvbody li, .mathcard p { overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; }
+.note { border-left: 3px solid var(--gap); padding: 6px 14px; margin: 14px 0; font-size: 15.5px; background: var(--sunk); border-radius: 0 6px 6px 0; }
+
+/* quiz */
+.quizbox { display: grid; gap: 14px; }
+.qq { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; }
+.qq .qt { font-weight: 600; margin: 0 0 10px; }
+.qq .qt .qn { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-right: 8px; font-weight: 400; }
+.qq .qt .ql { font-family: var(--mono); font-size: 11px; color: var(--gap); border: 1px solid currentColor; border-radius: 3px; padding: 0 5px; margin-left: 8px; font-weight: 400; white-space: nowrap; }
+.opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 600px) { .opts { grid-template-columns: minmax(0, 1fr); } }
+.opt { text-align: left; font-family: var(--body); font-size: 15.5px; line-height: 1.4; padding: 9px 12px; border-radius: 7px; border: 1px solid var(--rule); background: var(--bg); color: var(--ink); cursor: pointer; }
+.opt:hover:not(:disabled) { border-color: var(--ink); }
+.opt:disabled { cursor: default; }
+.opt.right { border-color: var(--green); background: var(--green-soft); }
+.opt.wrong { border-color: var(--red); background: var(--red-soft); }
+.why-ans { margin: 10px 0 0; font-size: 15px; padding: 8px 12px; border-radius: 6px; background: var(--sunk); }
+.why-ans b.ok { color: var(--green); } .why-ans b.no { color: var(--red); }
+.quizfoot { display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 12.5px; color: var(--muted); gap: 10px; flex-wrap: wrap; }
+
+table.vs { border-collapse: collapse; width: 100%; font-size: 15px; }
+table.vs th, table.vs td { padding: 9px 10px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+table.vs thead th { font-family: var(--display); font-size: 16px; }
+table.vs tbody th { font-family: var(--mono); font-size: 12px; font-weight: 400; color: var(--muted); white-space: nowrap; }
+
+footer { padding-block: 32px; color: var(--muted); font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+/* additions for this lab */
+table.t tr.on td { background: var(--mi-soft); font-weight: 600; }
+table.t td.c, table.t th.c { text-align: center; }
+.yes { color: var(--green); font-weight: 600; } .no { color: var(--muted); }
+.legend3 i.ln { width: 18px; height: 3px; border-radius: 2px; }
+.legend3 i.dash { width: 18px; height: 0; border-radius: 0; border-top: 2px dashed var(--ink); background: none !important; }
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-in">
+  <div class="brand">Kernel <span>Density</span> Lab</div>
+  <div class="chips">
+    <a href="#kernels">16.3.1</a><a href="#parzen">16.3.2</a><a href="#bandwidth">16.3.3</a><a href="#knn">16.3.4</a><a href="#nw">16.3.5.1</a><a href="#var">16.3.5.2</a><a href="#loess">16.3.5.3</a><a href="#cheat">Sheet</a>
+  </div>
+  <div class="tb-right">
+    <div class="lvpick" id="lvpick" role="group" aria-label="Explanation level">
+      <button data-setl="1">Kid</button><button data-setl="2">High school</button><button data-setl="3">Undergrad</button><button data-setl="4">Grad</button>
+    </div>
+    <div class="score" id="score">Quiz <b>0</b> / 0</div>
+  </div>
+</div></div>
+
+<div class="wrap">
+<aside class="rail"><nav id="rail">
+  <a href="#kernels"><span class="n">16.3.1</span>Density kernels</a>
+  <a href="#parzen"><span class="n">16.3.2</span>Parzen window estimator</a>
+  <a href="#bandwidth"><span class="n">16.3.3</span>Choosing the bandwidth</a>
+  <a href="#knn"><span class="n">16.3.4</span>From KDE to KNN</a>
+  <a href="#nw"><span class="n">16.3.5.1</span>Nadaraya-Watson regression</a>
+  <a href="#var"><span class="n">16.3.5.2</span>Predictive variance</a>
+  <a href="#loess"><span class="n">16.3.5.3</span>Locally weighted regression</a>
+  <a href="#cheat"><span class="n">—</span>Cheat sheet</a>
+</nav></aside>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">Murphy, <i>Probabilistic Machine Learning</i> · Chapter 16 · §16.3</div>
+  <h1>Put a small bump on every data point. Add them up. That's a <span class="m">density</span>.</h1>
+  <p class="lede"><b>Kernel density estimation</b> (KDE) builds a probability distribution \(p(\mathbf x)\) straight from the data, without choosing a family like "Gaussian" first. Each training example contributes one small, symmetric bump called a <b>kernel</b>. The estimate is the average of the bumps. Like KNN in §16.1, it keeps all the training data, so it is <b>nonparametric</b>.</p>
+  <p class="lede">KDE is a <b>generative model</b>: you can evaluate \(p(\mathbf x)\) at any point, and you can sample new data from it. The same idea also gives a classifier (KNN, derived properly this time) and a regression method (Nadaraya-Watson kernel regression and its local-linear cousin, LOWESS).</p>
+  <p class="lede">Every section has four parts: <b>Explain it</b> at your level, <b>Play</b>, <b>Math, slowly</b>, and <b>Check yourself</b>. Your quiz score sits in the top bar.</p>
+  <div class="levelcards" id="levelcards">
+    <button data-setl="1"><b>Kid</b><span>Elementary school. Stories, no symbols.</span></button>
+    <button data-setl="2"><b>High school</b><span>Graphs, areas, averages.</span></button>
+    <button data-setl="3"><b>Undergrad</b><span>Integrals, sums, the book's equations.</span></button>
+    <button data-setl="4"><b>Grad / MLE</b><span>Bias–variance, rates, what people do in practice.</span></button>
+  </div>
+  <p class="hint" style="margin-top:10px">Pick a level here or in the top bar. Every "Explain it" box switches to match, and you can still flip tabs one box at a time.</p>
+  <div class="legend3">
+    <span><i style="background:var(--ink)"></i>data point</span>
+    <span><i class="ln" style="background:var(--mi)"></i>the KDE / kernel estimate</span>
+    <span><i class="ln" style="background:var(--c1)"></i>one kernel bump</span>
+    <span><i class="dash"></i>the truth (when we know it)</span>
+  </div>
+</header>
+
+<!-- ============ 16.3.1 Density kernels ============ -->
+<section class="sec" id="kernels">
+  <div class="sec-head"><span class="secnum">§16.3.1</span><h2>Density kernels: a small, symmetric bump with area 1</h2></div>
+  <div class="intro">
+    <p>"Kernel" means several different things in machine learning. In this section a <b>density kernel</b> is a function \(K:\mathbb R\to\mathbb R_+\) with two properties: it integrates to 1, \(\int K(x)\,dx=1\), and it is symmetric, \(K(-x)=K(x)\). So a density kernel is a probability density centered at 0.</p>
+    <p>Symmetry makes its mean 0, so a kernel shifted to sit on a data point \(x_n\) has mean exactly \(x_n\) (Eq. 16.25). A <b>bandwidth</b> \(h\) stretches the bump sideways and squashes it down so the area stays 1 (Eq. 16.28).</p>
+  </div>
+
+  <div class="block lv"><h3 class="blabel"><span class="tag">Explain it</span>At your level</h3>
+    <div class="lvcard" data-lv>
+      <div data-l="1">
+        <p class="big">Think of a scoop of sand.</p>
+        <p>You pour one scoop on the floor and it makes a little hill. The hill is tallest in the middle and the same on both sides. No matter how you spread it, you always have exactly one scoop of sand.</p>
+        <p>If you spread it wide, the hill gets flat and low. If you keep it narrow, the hill gets tall and pointy. The amount of sand never changes. How wide you spread it is called the <b>bandwidth</b>.</p>
+        <p>Different kernels are different hill shapes: a flat box, a round dome, or a smooth bell.</p>
+      </div>
+      <div data-l="2">
+        <p>A kernel is a curve with three rules: it's never negative, the area under it is exactly 1, and its left half is a mirror image of its right half.</p>
+        <p>The simplest is the <b>boxcar</b>: a rectangle of height 0.5 from −1 to 1. Width 2 times height 0.5 gives area 1. The <b>Gaussian</b> is the bell curve.</p>
+        <p>The bandwidth \(h\) stretches the curve. If you make it twice as wide, you have to make it half as tall to keep the area at 1. That's why the formula is \(\frac1h K(\frac xh)\): dividing \(x\) by \(h\) stretches it, and the \(\frac1h\) out front squashes it.</p>
+        <p>Because it's symmetric, the balance point (the mean) of a kernel centered at \(x_n\) is \(x_n\) itself.</p>
+      </div>
+      <div data-l="3">
+        <p>A density kernel is a zero-mean, symmetric pdf: \(K\ge0\), \(\int K=1\), \(K(-x)=K(x)\). Symmetry makes \(xK(x)\) an odd function, so \(\int xK(x)\,dx=0\). Substituting \(u=x-x_n\) gives Eq. 16.25: \(\int xK(x-x_n)\,dx=x_n\).</p>
+        <p>The scaled kernel \(K_h(x)=\frac1hK(\frac xh)\) is still a pdf (substitute \(u=x/h\)), and its standard deviation is \(h\) times that of \(K\).</p>
+        <p>Table 16.1 compares kernels on three properties. <b>Compact</b> support (zero outside \([-1,1]\)) means far-away points contribute nothing, which is faster to compute. <b>Smooth</b> means differentiable inside the support. <b>Boundaries</b> means also differentiable at \(\pm1\), where the kernel meets zero. Only the tri-cube has all three; the Gaussian is smooth but never exactly zero.</p>
+        <p>In \(D\) dimensions, an <b>RBF</b> kernel depends only on \(\lVert\mathbf x\rVert\). The Gaussian RBF factors into a product of 1-D Gaussians (Eq. 16.30).</p>
+      </div>
+      <div data-l="4">
+        <ul>
+          <li><b>Not a Mercer kernel.</b> A density kernel is a pdf on the input space, used for smoothing. A Mercer (positive definite) kernel \(\mathcal K(\mathbf x,\mathbf x')\) is an inner product in a feature space, used in GPs and SVMs (Ch. 17). The Gaussian happens to be both, which is why the names blur.</li>
+          <li><b>Kernel order.</b> A second-order kernel has \(\int K=1\), \(\int xK=0\), \(\mu_2(K)=\int x^2K>0\). Every kernel here is second order. Higher-order kernels set \(\mu_2=0\) to cancel the \(h^2\) bias term, at the price of taking negative values.</li>
+          <li><b>Efficiency.</b> Under the asymptotic MISE criterion, the Epanechnikov kernel is optimal; the Gaussian is about 95% as efficient, tri-cube and boxcar about 99% and 93%. The choice of kernel matters far less than the choice of \(h\).</li>
+          <li><b>Compact support in practice.</b> With compact support, KDE evaluation only touches points within \(h\) of the query, so a k-d tree or grid gives near \(O(\log N)\) queries. With a Gaussian, people truncate at a few \(h\) or use fast Gauss transforms / FFT binning.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="block play"><h3 class="blabel"><span class="tag">Play</span>Four kernels, one bandwidth slider</h3>
+    <div class="panel">
+      <p class="hint">Pick a kernel and change the bandwidth \(h\). The shaded area is computed numerically on the fly, and it stays at 1. Slide the center \(x_n\) and the mean follows it exactly (Eq. 16.25). Turn on "compare" to see Figure 16.8.</p>
+      <div class="two">
+        <div>
+          <svg class="plot" id="ker-svg" viewBox="0 0 460 320" aria-label="The selected kernel K_h(x - x_n)"></svg>
+          <div class="btns"><label class="chk"><input type="checkbox" id="ker-all"> compare all four (Figure 16.8)</label></div>
+        </div>
+        <div>
+          <div class="btns" style="margin-top:0"><span class="lab">kernel:</span><div class="seg" id="ker-k"><button data-k="box" class="on">Boxcar</button><button data-k="epa">Epanechnikov</button><button data-k="tri">Tri-cube</button><button data-k="gau">Gaussian</button></div></div>
+          <div class="ctrl" style="margin-top:10px"><label for="ker-h">bandwidth h</label><input type="range" id="ker-h" min="0.25" max="2" step="0.05" value="1"><output id="ker-h-o">1.00</output></div>
+          <div class="ctrl"><label for="ker-c">center xₙ</label><input type="range" id="ker-c" min="-1.5" max="1.5" step="0.05" value="0"><output id="ker-c-o">0.00</output></div>
+          <div class="readout">
+            <div class="stat g"><div class="k">area ∫ K_h</div><div class="v" id="ker-area">–</div></div>
+            <div class="stat m"><div class="k">mean ∫ x K_h(x − xₙ)</div><div class="v" id="ker-mean">–</div></div>
+            <div class="stat b"><div class="k">peak height K(0)/h</div><div class="v" id="ker-peak">–</div></div>
+            <div class="stat a"><div class="k">support</div><div class="v" id="ker-sup" style="font-size:18px">–</div></div>
+          </div>
+          <div class="scroll" style="margin-top:14px">
+            <table class="t" id="ker-table">
+              <thead><tr><th>Table 16.1</th><th>K(x) on |x| ≤ 1</th><th class="c">Compact</th><th class="c">Smooth</th><th class="c">Boundaries</th></tr></thead>
+              <tbody>
+                <tr data-k="gau"><td>Gaussian</td><td>(2π)^(−½) e^(−x²/2), all x</td><td class="c no">0</td><td class="c yes">1</td><td class="c yes">1</td></tr>
+                <tr data-k="box"><td>Boxcar</td><td>½</td><td class="c yes">1</td><td class="c no">0</td><td class="c no">0</td></tr>
+                <tr data-k="epa"><td>Epanechnikov</td><td>¾ (1 − x²)</td><td class="c yes">1</td><td class="c yes">1</td><td class="c no">0</td></tr>
+                <tr data-k="tri"><td>Tri-cube</td><td>⁷⁰⁄₈₁ (1 − |x|³)³</td><td class="c yes">1</td><td class="c yes">1</td><td class="c yes">1</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h4>In two dimensions: radial basis function kernels</h4>
+      <p class="hint">Eq. 16.29: an RBF kernel depends only on the distance \(\lVert\mathbf x\rVert\), so its contour lines are circles. The Gaussian RBF also equals a product of 1-D Gaussians, one per axis (Eq. 16.30). The dashed circles mark ‖x‖ = h (and 2h for the Gaussian).</p>
+      <div class="two-even">
+        <svg class="plot" id="rbf-svg" viewBox="0 0 360 360" aria-label="A 2-D radial kernel shown as a heat map"></svg>
+        <div>
+          <div class="btns" style="margin-top:0"><span class="lab">profile:</span><div class="seg" id="rbf-k"><button data-k="box">Boxcar</button><button data-k="epa">Epanechnikov</button><button data-k="tri">Tri-cube</button><button data-k="gau" class="on">Gaussian</button></div></div>
+          <div class="ctrl" style="margin-top:10px"><label for="rbf-h">bandwidth h</label><input type="range" id="rbf-h" min="0.3" max="2" step="0.05" value="1"><output id="rbf-h-o">1.00</output></div>
+          <div class="chain" id="rbf-chain"></div>
+          <p class="hint" style="margin-top:12px">Only the Gaussian factors into a product of 1-D kernels <i>and</i> is radial. A product of 1-D boxcars would be a square, not a disc.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="block math"><h3 class="blabel"><span class="tag">Math, slowly</span>Equations 16.25 – 16.30</h3>
+    <div class="mathcard">
+      <h4>Why the shifted kernel has mean \(x_n\)</h4>
+      <div class="eq">\[ \int x\,K(x-x_n)\,dx = x_n \tag{16.25} \]</div>
+      <ol class="steps">
+        <li><div>Substitute \(u=x-x_n\), so \(x=u+x_n\) and \(dx=du\). <span class="why">This slides the kernel back to center 0.</span>
+          \[ \int (u+x_n)\,K(u)\,du=\int uK(u)\,du + x_n\int K(u)\,du \]</div></li>
+        <li><div>\(uK(u)\) is odd: \((-u)K(-u)=-uK(u)\) because \(K(-u)=K(u)\). <span class="why">An odd function integrates to 0 over a symmetric range, so the first term vanishes.</span></div></li>
+        <li><div>\(\int K(u)\,du=1\). <span class="why">That's the normalization rule.</span> What's left is \(0+x_n\cdot1=x_n\).</div></li>
+      </ol>
+      <p>This is the fact that makes Nadaraya-Watson regression work in §16.3.5.1.</p>
+
+      <h4>Two kernels, checked by hand</h4>
+      <div class="eq">\[ K_{\text{box}}(x)=\tfrac12\,\mathbb I(|x|\le1) \tag{16.26} \qquad\int_{-1}^{1}\tfrac12\,dx=\tfrac12\cdot2=1 \]</div>
+      <div class="eq">\[ K_{\text{Epa}}(x)=\tfrac34(1-x^2)\,\mathbb I(|x|\le1),\qquad \int_{-1}^{1}\tfrac34(1-x^2)\,dx=\tfrac34\Big[x-\tfrac{x^3}3\Big]_{-1}^{1}=\tfrac34\Big(2-\tfrac23\Big)=1 \]</div>
+      <div class="eq">\[ K_{\text{Gauss}}(x)=\frac{1}{(2\pi)^{1/2}}e^{-x^2/2} \tag{16.27} \]</div>
+      <p>The \(\frac1{\sqrt{2\pi}}\) is there because \(\int e^{-x^2/2}dx=\sqrt{2\pi}\).</p>
+
+      <h4>The bandwidth keeps the area at 1</h4>
+      <div class="eq">\[ K_h(x)\triangleq\frac1h\,K\!\Big(\frac xh\Big) \tag{16.28} \]</div>
+      <ol class="steps">
+        <li><div>Substitute \(u=x/h\), so \(dx=h\,du\): \(\int\frac1hK(\frac xh)\,dx=\int\frac1hK(u)\,h\,du=\int K(u)\,du=1\). <span class="why">The \(\frac1h\) exactly cancels the stretch.</span></div></li>
+        <li><div>The boxcar with bandwidth \(h\) is \(\frac1{2h}\) on \([-h,h]\). <span class="why">Width \(2h\), height \(\frac1{2h}\), area 1.</span></div></li>
+        <li><div>Variance: \(\int x^2K_h(x)\,dx=h^2\int u^2K(u)\,du\). <span class="why">So the standard deviation scales with \(h\). A Gaussian kernel with bandwidth \(h\) is just \(\mathcal N(0,h^2)\).</span></div></li>
+      </ol>
+
+      <h4>Vector inputs</h4>
+      <div class="eq">\[ K_h(\mathbf x)\propto K_h(\lVert\mathbf x\rVert) \tag{16.29} \]</div>
+      <div class="eq">\[ K_h(\mathbf x)=\frac{1}{h^D(2\pi)^{D/2}}\prod_{d=1}^{D}\exp\!\Big(-\frac{1}{2h^2}x_d^2\Big) \tag{16.30} \]</div>
+      <p>A product of exponentials is the exponential of a sum: \(\prod_d e^{-x_d^2/2h^2}=e^{-\lVert\mathbf x\rVert^2/2h^2}\). So the product form depends only on \(\lVert\mathbf x\rVert\): it is radial. Each axis contributes a factor \(\frac1{h\sqrt{2\pi}}\), which gives the constant \(\frac1{h^D(2\pi)^{D/2}}\). This is the density of \(\mathcal N(\mathbf 0,h^2I)\).</p>
+      <div class="note">Why use compact kernels at all? With the Gaussian, every data point contributes something to every query, so evaluating a KDE costs \(O(N)\) per query no matter what. With compact support, points farther than \(h\) contribute exactly 0 and can be skipped with a spatial index.</div>
+    </div>
+  </div>
+
+  <div class="block quiz"><h3 class="blabel"><span class="tag">Check yourself</span>Density kernels</h3><div class="quizbox" data-quiz="kernels"></div></div>
+</section>
+
+<!-- ============ 16.3.2 Parzen ============ -->
+<section class="sec" id="parzen">
+  <div class="sec-head"><span class="secnum">§16.3.2</span><h2>The Parzen window estimator: one bump per data point</h2></div>
+  <div class="intro">
+    <p>Start from a Gaussian mixture model with \(K\) clusters, all with the same spherical covariance and equal weights (Eq. 16.31). Picking \(K\) and the centers \(\boldsymbol\mu_k\) is the hard part. KDE skips it: put one cluster on every data point (Eq. 16.32), then allow any density kernel (Eq. 16.33).</p>
+    <p>The result is the <b>Parzen window density estimator</b>, also called the <b>kernel density estimator</b>. Nothing is fitted except the bandwidth \(h\). The price: you store all \(N\) points, and every evaluation touches all of them.</p>
+  </div>
+
+  <div class="block lv"><h3 class="blabel"><span class="tag">Explain it</span>At your level</h3>
+    <div class="lvcard" data-lv>
+      <div data-l="1">
+        <p class="big">Drop one scoop of sand everywhere you found a seashell.</p>
+        <p>Where lots of shells were close together, the sand piles up into a big hill. Where there was just one shell, you get a little bump. Where there were none, the floor stays flat.</p>
+        <p>Now the height of the sand tells you where shells are likely to be found. That's the whole idea. If you want to guess where the <i>next</i> shell might be, pick a random scoop and look somewhere inside it.</p>
+        <p>Flat, wide scoops make one big smooth hill. Narrow, pointy scoops make a spike at every shell.</p>
+      </div>
+      <div data-l="2">
+        <p>You have \(N\) data points on a number line. Draw a kernel bump centered on each one, make each bump \(\frac1N\) as tall (so each has area \(\frac1N\)), and add them all up. The total area is \(N\cdot\frac1N=1\), so the sum is a probability density.</p>
+        <p>With the <b>boxcar</b> kernel, this is just counting. At any spot \(x\), count the data points within \(h\) of \(x\), divide by \(N\) and by the window width \(2h\). It looks like a histogram, but the "bins" slide along with \(x\) instead of being fixed in place.</p>
+        <p>With the <b>Gaussian</b> kernel, each point's vote fades smoothly with distance, so the result is a smooth curve.</p>
+      </div>
+      <div data-l="3">
+        <p>Eq. 16.33: \(p(\mathbf x\mid\mathcal D)=\frac1N\sum_{n=1}^NK_h(\mathbf x-\mathbf x_n)\). It's an equal-weight mixture of \(N\) copies of the kernel, one centered on each training point. Each component is a pdf, so the average is a pdf.</p>
+        <p>Compared with a GMM: no \(K\) to choose, no EM, no local optima. The cost moves to prediction time: \(O(ND)\) memory and \(O(ND)\) per evaluation.</p>
+        <p>Because it's a mixture, sampling is easy: pick \(n\) uniformly from \(\{1,\dots,N\}\), then draw \(\boldsymbol\epsilon\sim K\) and return \(\mathbf x_n+h\boldsymbol\epsilon\). That's what "generative" means here.</p>
+        <p>Figure 16.9 shows the two extremes. The boxcar gives a piecewise-constant estimate with jumps at \(x_n\pm h\). The Gaussian is smooth. Doubling \(h\) flattens both.</p>
+      </div>
+      <div data-l="4">
+        <ul>
+          <li><b>Consistency.</b> If \(h\to0\) and \(Nh^D\to\infty\), \(\hat p\to p\) in mean square at every continuity point (Parzen, 1962). The first condition kills bias, the second kills variance.</li>
+          <li><b>Bias and variance.</b> \(\mathbb E\hat p(x)=(K_h*p)(x)=p(x)+\tfrac{h^2}2\mu_2(K)p''(x)+o(h^2)\): KDE is unbiased for the <i>smoothed</i> density, and it flattens peaks and fills valleys. \(\mathrm{Var}\,\hat p(x)\approx\frac{p(x)R(K)}{Nh^D}\), with \(R(K)=\int K^2\).</li>
+          <li><b>Rates.</b> Balancing gives MISE \(=O(N^{-4/(4+D)})\), slower than the parametric \(O(N^{-1})\) and much slower as \(D\) grows. This is the curse of dimensionality from §16.1.2 again.</li>
+          <li><b>Practice.</b> scikit-learn's <code>KernelDensity</code> uses a k-d / ball tree with tolerances; SciPy's <code>gaussian_kde</code> uses a full covariance bandwidth \(H=h^2\hat\Sigma\). For 1-D plots, binned FFT KDE (as in seaborn/statsmodels) evaluates on a grid in \(O(G\log G)\).</li>
+          <li><b>Boundaries.</b> For data on \([0,\infty)\), a symmetric kernel leaks mass below 0. Fixes: reflection, boundary kernels, or a log transform.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="block play"><h3 class="blabel"><span class="tag">Play</span>Build a KDE from your own points</h3>
+    <div class="panel">
+      <p class="hint">The six points from Figure 16.9 are loaded. Blue curves are the individual bumps \(\frac1NK_h(x-x_n)\); the purple curve is their sum. Choose what a click does: <b>move the query</b> line (see the sum term by term), <b>add or drag</b> data points, or <b>erase</b> them.</p>
+      <svg class="plot drag" id="pz-svg" viewBox="0 0 640 330" aria-label="Kernel density estimate built from the data points"></svg>
+      <div class="two" style="margin-top:6px">
+        <div>
+          <div class="btns" style="margin-top:0"><span class="lab">a click:</span><div class="seg" id="pz-mode"><button data-m="q" class="on">move query</button><button data-m="add">add / drag points</button><button data-m="x">erase</button></div></div>
+          <div class="btns"><span class="lab">kernel:</span><div class="seg" id="pz-k"><button data-k="box" class="on">Boxcar</button><button data-k="epa">Epanechnikov</button><button data-k="tri">Tri-cube</button><button data-k="gau">Gaussian</button></div></div>
+          <div class="ctrl" style="margin-top:10px"><label for="pz-h">bandwidth h</label><input type="range" id="pz-h" min="0.1" max="4" step="0.05" value="1"><output id="pz-h-o">1.00</output></div>
+          <div class="btns"><label class="chk"><input type="checkbox" id="pz-bumps" checked> show each bump</label></div>
+          <div class="btns"><span class="lab">Figure 16.9:</span><button class="b" data-pz="box,1">(a) unif, h = 1</button><button class="b" data-pz="box,2">(b) unif, h = 2</button><button class="b" data-pz="gau,1">(c) gauss, h = 1</button><button class="b" data-pz="gau,2">(d) gauss, h = 2</button></div>
+          <div class="btns"><button class="b" id="pz-reset">Back to the 6 points</button><button class="b" id="pz-more">Add 20 random points</button><button class="b" id="pz-clear">Clear all</button></div>
+        </div>
+        <div>
+          <div class="readout" style="margin-top:0">
+            <div class="stat"><div class="k">N points</div><div class="v" id="pz-n">–</div></div>
+            <div class="stat m"><div class="k">p(x*) at the query</div><div class="v" id="pz-p">–</div></div>
+            <div class="stat g"><div class="k">total area</div><div class="v" id="pz-area">–</div></div>
+          </div>
+          <div class="chain" id="pz-chain"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h4>Sample new data from the KDE</h4>
+      <p class="hint">Uses the points, kernel and \(h\) from the panel above. One draw = pick a data point at random, then add kernel-shaped noise scaled by \(h\). Draw many and the histogram of samples settles onto the purple curve.</p>
+      <svg class="plot" id="sm-svg" viewBox="0 0 640 260" aria-label="Histogram of samples drawn from the KDE"></svg>
+      <div class="btns"><button class="b pri" id="sm-1">Draw 1</button><button class="b" id="sm-100">Draw 100</button><button class="b" id="sm-1000">Draw 1,000</button><button class="b" id="sm-clear">Clear samples</button><span class="lab" id="sm-n"></span></div>
+      <div class="chain" id="sm-chain">Press "Draw 1" to see one sample worked out.</div>
+    </div>
+  </div>
+
+  <div class="block math"><h3 class="blabel"><span class="tag">Math, slowly</span>Equations 16.31 – 16.33</h3>
+    <div class="mathcard">
+      <h4>From a mixture model to KDE</h4>
+      <div class="eq">\[ p(\mathbf x\mid\boldsymbol\theta)=\frac1K\sum_{k=1}^{K}\mathcal N(\mathbf x\mid\boldsymbol\mu_k,\sigma^2I) \tag{16.31} \]</div>
+      <ol class="steps">
+        <li><div>This is a GMM with equal weights \(\frac1K\) and one shared spherical covariance \(\sigma^2I\). <span class="why">You still have to choose \(K\) and learn the centers \(\boldsymbol\mu_k\), for example with EM.</span></div></li>
+        <li><div>Set \(K=N\) and \(\boldsymbol\mu_n=\mathbf x_n\): one cluster per data point. <span class="why">Nothing left to learn except \(\sigma\).</span>
+          \[ p(\mathbf x\mid\boldsymbol\theta)=\frac1N\sum_{n=1}^{N}\mathcal N(\mathbf x\mid\mathbf x_n,\sigma^2I) \tag{16.32} \]</div></li>
+        <li><div>\(\mathcal N(\mathbf x\mid\mathbf x_n,\sigma^2I)\) is the Gaussian kernel \(K_h(\mathbf x-\mathbf x_n)\) with \(h=\sigma\) (Eq. 16.30). Allow any density kernel: <span class="why">This is the Parzen window / kernel density estimator.</span>
+          \[ p(\mathbf x\mid\mathcal D)=\frac1N\sum_{n=1}^{N}K_h(\mathbf x-\mathbf x_n) \tag{16.33} \]</div></li>
+      </ol>
+
+      <h4>It is a valid density</h4>
+      <p>Each \(K_h(\mathbf x-\mathbf x_n)\ge0\), so the sum is \(\ge0\). And \(\int p(\mathbf x\mid\mathcal D)\,d\mathbf x=\frac1N\sum_n\int K_h(\mathbf x-\mathbf x_n)\,d\mathbf x=\frac1N\sum_n1=1\). The "total area" readout in the Play box checks this numerically.</p>
+
+      <h4>The boxcar version is a sliding count</h4>
+      <p>With \(K_h(u)=\frac1{2h}\mathbb I(|u|\le h)\) in 1-D:</p>
+      <div class="eq">\[ p(x\mid\mathcal D)=\frac1N\sum_{n}\frac{1}{2h}\mathbb I(|x-x_n|\le h)=\frac{\#\{n: |x-x_n|\le h\}}{N\cdot2h} \]</div>
+      <p><b>Worked example (Figure 16.9a).</b> Data \(\{-2.1,-1.3,-0.4,1.9,5.1,6.2\}\), \(h=1\), query \(x=-1.2\). The points within 1 of \(-1.2\) are \(-2.1\) (distance 0.9), \(-1.3\) (0.1) and \(-0.4\) (0.8). So</p>
+      <div class="eq">\[ p(-1.2\mid\mathcal D)=\frac{3}{6\cdot2}=0.25 \]</div>
+      <p>That's the tallest step in Figure 16.9a. Put the query at \(-1.2\) in the Play box with the boxcar and \(h=1\) to check.</p>
+
+      <h4>Sampling</h4>
+      <ol class="steps">
+        <li><div>Draw \(n\sim\mathrm{Uniform}\{1,\dots,N\}\). <span class="why">Each mixture component has weight \(\frac1N\).</span></div></li>
+        <li><div>Draw \(\epsilon\sim K\) (the unscaled kernel) and return \(x=x_n+h\epsilon\). <span class="why">\(h\epsilon\) has density \(K_h\), so \(x\) has density \(K_h(x-x_n)\).</span></div></li>
+      </ol>
+      <div class="note">Cost. Memory is \(O(ND)\): the whole dataset is the model. Each evaluation of \(p(\mathbf x\mid\mathcal D)\) sums \(N\) kernels, \(O(ND)\). A GMM with \(K\ll N\) components costs \(O(KD)\) per evaluation after training.</div>
+    </div>
+  </div>
+
+  <div class="block quiz"><h3 class="blabel"><span class="tag">Check yourself</span>Parzen windows</h3><div class="quizbox" data-quiz="parzen"></div></div>
+</section>
+
+<!-- ============ 16.3.3 Bandwidth ============ -->
+<section class="sec" id="bandwidth">
+  <div class="sec-head"><span class="secnum">§16.3.3</span><h2>Choosing the bandwidth: too narrow is spiky, too wide is blurry</h2></div>
+  <div class="intro">
+    <p>The bandwidth \(h\) controls model complexity. Small \(h\): a spike on every point, low bias, high variance (overfitting). Large \(h\): one smooth blob, high bias, low variance (underfitting).</p>
+    <p>If the data really are Gaussian and you use a Gaussian kernel, the best \(h\) (minimizing frequentist risk) is \(h=\sigma\big(\frac{4}{3N}\big)^{1/5}\). Estimate \(\sigma\) robustly with the median absolute deviation: \(\hat\sigma=1.4826\,\mathrm{MAD}\).</p>
+  </div>
+
+  <div class="block lv"><h3 class="blabel"><span class="tag">Explain it</span>At your level</h3>
+    <div class="lvcard" data-lv>
+      <div data-l="1">
+        <p class="big">How wide should each scoop of sand be?</p>
+        <p>Too narrow, and you get a sharp little tower at each shell, with empty floor in between. That says "shells can <i>only</i> be exactly where we already found them," which is silly.</p>
+        <p>Too wide, and everything melts into one big flat pile. You can't tell that shells come in two groups anymore.</p>
+        <p>The right width is in the middle. And the more shells you've found, the narrower your scoops can be, because the shells themselves already fill in the gaps.</p>
+      </div>
+      <div data-l="2">
+        <p>The bandwidth is like the "blur" slider on a photo. No blur: every speck of noise shows. Lots of blur: you lose the real details.</p>
+        <p>There's a recipe for a good starting value, called a <b>rule of thumb</b>: \(h=\sigma\,(4/(3N))^{1/5}\), where \(\sigma\) is the spread (standard deviation) of the data and \(N\) is how many points you have. For 100 points with \(\sigma=1\), that's about 0.42.</p>
+        <p>Notice the power \(\frac15\): to cut \(h\) in half, you need \(2^5=32\) times as much data.</p>
+        <p>The spread can be thrown off by a few wild points. A safer way to measure it: find the middle value (median), measure how far each point is from it, and take the median of those distances. Multiply by 1.4826 and you get \(\sigma\) for normal-looking data.</p>
+      </div>
+      <div data-l="3">
+        <p>The rule \(h=\sigma(4/3N)^{1/5}\approx1.06\,\sigma N^{-1/5}\) minimizes the asymptotic mean integrated squared error (AMISE) when both the true density and the kernel are Gaussian ([BA97a]; it's often called Silverman's rule).</p>
+        <p><b>Robust scale.</b> \(\mathrm{MAD}=\mathrm{median}(|x-\mathrm{median}(x)|)\). For a Gaussian, \(\mathrm{MAD}=\Phi^{-1}(0.75)\,\sigma\approx0.6745\,\sigma\), so \(\hat\sigma=\mathrm{MAD}/0.6745=1.4826\,\mathrm{MAD}\). A few outliers can blow up the sample standard deviation, but they barely move a median.</p>
+        <p><b>D dimensions.</b> Compute \(h_d\) for each dimension separately and use the geometric mean \(h=(\prod_dh_d)^{1/D}\).</p>
+        <p>The rule assumes a Gaussian truth, so it oversmooths multimodal data. Try the "two bumps" dataset in the Play box. A data-driven alternative is to pick \(h\) that maximizes the leave-one-out log-likelihood.</p>
+      </div>
+      <div data-l="4">
+        <ul>
+          <li><b>AMISE.</b> \(\mathrm{AMISE}(h)=\frac{h^4}4\mu_2(K)^2R(p'')+\frac{R(K)}{Nh}\). Setting the derivative to 0 gives \(h^*=\big[\frac{R(K)}{\mu_2(K)^2R(p'')N}\big]^{1/5}\). With a Gaussian \(K\) (\(R(K)=\frac1{2\sqrt\pi}\), \(\mu_2=1\)) and Gaussian \(p\) (\(R(p'')=\frac{3}{8\sqrt\pi\sigma^5}\)), you get exactly \(\sigma(4/3N)^{1/5}\). The optimal AMISE then decreases like \(N^{-4/5}\).</li>
+          <li><b>Silverman's robust version</b> uses \(0.9\min(\hat\sigma,\mathrm{IQR}/1.34)N^{-1/5}\) to hedge against multimodality and heavy tails.</li>
+          <li><b>Data-driven selectors.</b> Least-squares (unbiased) cross-validation minimizes an unbiased estimate of ISE; likelihood CV maximizes \(\sum_i\log\hat p_{-i}(x_i)\) and is sensitive to heavy tails (the outlier term dominates). Plug-in selectors (Sheather–Jones) estimate \(R(p'')\) with a pilot KDE and are the usual default in R.</li>
+          <li><b>Multivariate.</b> The general form uses a bandwidth matrix, \(K_H(\mathbf x)=|H|^{-1/2}K(H^{-1/2}\mathbf x)\). Scott's rule: \(H^{1/2}=N^{-1/(D+4)}\hat\Sigma^{1/2}\). The book's geometric mean collapses \(H\) to \(h^2I\), so standardize features first.</li>
+          <li><b>Adaptive bandwidths.</b> Sample-point (Abramson) estimators use \(h_n\propto\hat p(\mathbf x_n)^{-1/2}\): wide where data are sparse. The balloon estimator in §16.3.4 adapts \(h\) to the query instead.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="block play"><h3 class="blabel"><span class="tag">Play</span>Find the best bandwidth when you know the truth</h3>
+    <div class="panel">
+      <p class="hint">Data are drawn from a known density (dashed). The purple curve is a Gaussian-kernel KDE. The right chart shows the error for every \(h\) at once; the markers are the two rule-of-thumb bandwidths and the true best. Drag the \(h\) slider, or click a button to jump to one of them.</p>
+      <div class="btns" style="margin-top:0"><span class="lab">truth:</span><div class="seg" id="bw-d"><button data-d="gauss" class="on">Gaussian</button><button data-d="bimodal">Two bumps</button><button data-d="skew">Lopsided</button><button data-d="heavy">Heavy tails (t, ν = 2)</button></div></div>
+      <div class="ctrl" style="margin-top:10px"><label for="bw-n">sample size N</label><input type="range" id="bw-n" min="0" max="6" step="1" value="3"><output id="bw-n-o">100</output></div>
+      <div class="ctrl"><label for="bw-h">bandwidth h</label><input type="range" id="bw-h" min="-3" max="1.1" step="0.01" value="-0.8"><output id="bw-h-o">0.45</output></div>
+      <div class="two-even" style="margin-top:8px">
+        <div><p class="cap">true density vs KDE</p><svg class="plot" id="bw-fit" viewBox="0 0 400 300" aria-label="True density and kernel density estimate"></svg></div>
+        <div>
+          <div class="btns" style="margin-top:0"><div class="seg" id="bw-m"><button data-m="ise" class="on">error vs truth (ISE)</button><button data-m="loo">leave-one-out log-lik</button></div></div>
+          <svg class="plot" id="bw-curve" viewBox="0 0 400 270" aria-label="Error as a function of the bandwidth" style="margin-top:6px"></svg>
+        </div>
+      </div>
+      <div class="btns"><span class="lab">set h to:</span><button class="b" id="bw-sd">rule, σ̂ = std</button><button class="b" id="bw-mad">rule, σ̂ = 1.4826·MAD</button><button class="b" id="bw-best">best on this chart</button><span class="sep"></span><button class="b" id="bw-new">New sample</button></div>
+      <div class="readout">
+        <div class="stat"><div class="k">sample std</div><div class="v" id="bw-std">–</div></div>
+        <div class="stat"><div class="k">1.4826 · MAD</div><div class="v" id="bw-madv">–</div></div>
+        <div class="stat a"><div class="k">rule h (std)</div><div class="v" id="bw-hsd">–</div></div>
+        <div class="stat b"><div class="k">rule h (MAD)</div><div class="v" id="bw-hmad">–</div></div>
+        <div class="stat g"><div class="k">best h</div><div class="v" id="bw-hbest">–</div></div>
+      </div>
+      <p class="hint" style="margin-top:12px">ISE \(=\int(\hat p(x)-p(x))^2dx\) needs the true density, so you can only compute it in a simulation like this one. The leave-one-out log-likelihood uses the data alone: score each point under the KDE built from the other \(N-1\) points.</p>
+    </div>
+  </div>
+
+  <div class="block math"><h3 class="blabel"><span class="tag">Math, slowly</span>The rule of thumb and the MAD</h3>
+    <div class="mathcard">
+      <h4>The optimal bandwidth for Gaussian data</h4>
+      <div class="eq">\[ h=\sigma\Big(\frac{4}{3N}\Big)^{1/5}\approx1.06\,\sigma\,N^{-1/5} \]</div>
+      <ol class="steps">
+        <li><div>\((4/3)^{1/5}=e^{\frac15\ln(1.333)}=e^{0.0575}\approx1.059\). <span class="why">That's where the familiar 1.06 comes from.</span></div></li>
+        <li><div><b>Worked example.</b> \(\sigma=1\), \(N=100\): \(\frac{4}{300}=0.01333\), and \(0.01333^{1/5}=e^{\frac15\ln0.01333}=e^{-0.8635}\approx0.42\). <span class="why">So \(h\approx0.42\).</span></div></li>
+        <li><div>\(h\) is proportional to \(\sigma\). <span class="why">If you measure the data in centimeters instead of meters, the bandwidth scales with it, as it should.</span></div></li>
+        <li><div>\(h\propto N^{-1/5}\). <span class="why">With \(32\times\) more data, \(h\) halves. More data supports a sharper estimate, but slowly.</span></div></li>
+      </ol>
+
+      <h4>Where the \(\frac15\) comes from (sketch)</h4>
+      <p>At a point \(x\), the KDE's squared bias grows like \(h^4\) (smoothing flattens peaks) and its variance shrinks like \(\frac1{Nh}\) (each estimate averages about \(Nh\) nearby points). Integrated over \(x\):</p>
+      <div class="eq">\[ \mathrm{AMISE}(h)=A\,h^4+\frac{B}{Nh},\qquad \frac{d}{dh}=4Ah^3-\frac{B}{Nh^2}=0\;\Rightarrow\;h^5=\frac{B}{4AN} \]</div>
+      <p>So \(h\propto N^{-1/5}\). Plugging in \(A\) and \(B\) for a Gaussian kernel and Gaussian truth gives the constant \(\sigma(4/3)^{1/5}\).</p>
+
+      <h4>Robust spread: the MAD</h4>
+      <div class="eq">\[ \mathrm{MAD}=\mathrm{median}\big(|x-\mathrm{median}(x)|\big),\qquad\hat\sigma=1.4826\,\mathrm{MAD} \]</div>
+      <ol class="steps">
+        <li><div>For \(x\sim\mathcal N(\mu,\sigma^2)\), \(|x-\mu|\) is below its median exactly half the time: \(P(|x-\mu|\le m)=0.5\). <span class="why">That means \(m/\sigma=\Phi^{-1}(0.75)\approx0.6745\).</span></div></li>
+        <li><div>So \(\mathrm{MAD}\approx0.6745\,\sigma\), and \(\sigma\approx\mathrm{MAD}/0.6745=1.4826\,\mathrm{MAD}\). <span class="why">The constant makes the MAD agree with \(\sigma\) on Gaussian data.</span></div></li>
+        <li><div><b>Worked example.</b> Data \(\{1,2,3,4,100\}\). Median 3; absolute deviations \(\{2,1,0,1,97\}\); their median is 1, so \(\hat\sigma=1.48\). <span class="why">The sample standard deviation is about 43.6, all because of one point.</span></div></li>
+      </ol>
+
+      <h4>More than one dimension</h4>
+      <div class="eq">\[ h=\Big(\prod_{d=1}^{D}h_d\Big)^{1/D} \]</div>
+      <p>Example: \(h_1=0.2\), \(h_2=0.8\) gives \(h=\sqrt{0.16}=0.4\). A geometric mean is right for scale-like quantities: the "volume" \(h^D\) of the window equals \(\prod_dh_d\).</p>
+    </div>
+  </div>
+
+  <div class="block quiz"><h3 class="blabel"><span class="tag">Check yourself</span>Bandwidth</h3><div class="quizbox" data-quiz="bandwidth"></div></div>
+</section>
+
+<!-- ============ 16.3.4 KDE → KNN ============ -->
+<section class="sec" id="knn">
+  <div class="sec-head"><span class="secnum">§16.3.4</span><h2>From KDE to KNN: grow a balloon until it holds K points</h2></div>
+  <div class="intro">
+    <p>§16.1 introduced the K nearest neighbor classifier as a heuristic. Here it falls out of a <b>generative classifier</b>: model each class-conditional density \(p(\mathbf x\mid y=c)\) with a KDE, use the class frequencies as the prior, and apply Bayes' rule.</p>
+    <p>The twist is the window. Instead of a fixed bandwidth, grow a region around \(\mathbf x\) until it contains \(K\) points of any class. This is a <b>balloon kernel density estimator</b>. Its volume \(V(\mathbf x)\) changes from query to query, and in Bayes' rule everything except the neighbor counts cancels.</p>
+  </div>
+
+  <div class="block lv"><h3 class="blabel"><span class="tag">Explain it</span>At your level</h3>
+    <div class="lvcard" data-lv>
+      <div data-l="1">
+        <p class="big">Blow up a balloon around the mystery point until it touches 10 marbles.</p>
+        <p>Some marbles are red and some are blue. When the balloon holds 10, count: 7 red and 3 blue. So you guess red, and you're 7-out-of-10 sure.</p>
+        <p>Where marbles are packed tight, the balloon stays small. Where they're spread out, it gets big. Either way, you always count exactly 10.</p>
+        <p>Grown-ups can use a lot of fancy math here, about how crowded each color is and how common each color is. But when they do all of it, the answer comes out to exactly the same thing: 7 out of 10.</p>
+      </div>
+      <div data-l="2">
+        <p>To guess a label, ask two questions for each class: "How crowded is this class near \(\mathbf x\)?" (the density) and "How common is this class overall?" (the prior). Multiply, then compare.</p>
+        <p>Crowdedness = (how many class-\(c\) points are in the balloon) ÷ (all class-\(c\) points × balloon size). Commonness = (class-\(c\) points) ÷ (all points).</p>
+        <p>Multiply those and the "all class-\(c\) points" cancels. The balloon size is the same for every class, so it cancels too when you compare. What's left: the fraction of the \(K\) balloon points that are class \(c\). That's exactly the KNN vote from §16.1.</p>
+      </div>
+      <div data-l="3">
+        <p>Let \(V(\mathbf x)\) be the volume of the smallest ball around \(\mathbf x\) holding \(K\) points, and \(N_c(\mathbf x)\) the number of those from class \(c\). The balloon KDE for class \(c\) (Eq. 16.34) is \(\hat p(\mathbf x\mid y=c)=\frac{N_c(\mathbf x)}{N_cV(\mathbf x)}\): a count divided by (class size × volume), just like the boxcar KDE.</p>
+        <p>With prior \(p(y=c)=N_c/N\), Bayes' rule gives \(p(y=c\mid\mathbf x)\propto\frac{N_c(\mathbf x)}{N_cV}\cdot\frac{N_c}{N}=\frac{N_c(\mathbf x)}{NV}\). The factor \(\frac1{NV}\) is the same for every class, so after normalizing, \(p(y=c\mid\mathbf x)=\frac{N_c(\mathbf x)}{\sum_{c'}N_{c'}(\mathbf x)}=\frac{N_c(\mathbf x)}K\) (Eq. 16.35), which is Eq. 16.1.</p>
+        <p>The class sizes \(N_c\) cancel only because the prior is the empirical frequency. Use a different prior (say, uniform) and the KNN vote gets reweighted by \(1/N_c\).</p>
+      </div>
+      <div data-l="4">
+        <ul>
+          <li><b>Balloon vs sample-point.</b> A balloon estimator (Terrell–Scott [TS92]) varies the bandwidth with the query \(\mathbf x\). The resulting \(\hat p(\mathbf x)=\frac{K}{NV_K(\mathbf x)}\) is the classical KNN density estimate; it is not a proper density (it doesn't integrate to 1; in 1-D its tails decay like \(1/|x|\), so the integral diverges), but its ratios are still fine for classification.</li>
+          <li><b>Fixed-window comparison.</b> With a fixed boxcar window you get the same formula with \(\sum_cN_c(\mathbf x)\) in place of \(K\), but the total count can be 0 in sparse regions (posterior 0/0). The balloon guarantees \(K\) votes everywhere.</li>
+          <li><b>Consistency.</b> The KNN density estimate is consistent if \(K\to\infty\) and \(K/N\to0\); so is the induced classifier (Stone, 1977), matching the conditions in §16.1.</li>
+          <li><b>Class priors under shift.</b> If deployment priors \(\pi_c\) differ from training frequencies, the generative derivation tells you the fix: weight votes by \(\pi_cN/N_c\).</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="block play"><h3 class="blabel"><span class="tag">Play</span>Bayes' rule with a balloon</h3>
+    <div class="panel">
+      <p class="hint"><b>Click or drag</b> to move the test point ✕. The three classes have different sizes (45, 25 and 15 points), so the priors differ. The table computes every term of Eq. 16.35: \(p(\mathbf x\mid c)=N_c(\mathbf x)/(N_cV)\) and \(p(c)=N_c/N\). Watch the last column: it always equals \(N_c(\mathbf x)/K\). Switch to a fixed window to see what changes.</p>
+      <div class="two">
+        <div>
+          <svg class="plot drag" id="bk-svg" viewBox="0 0 420 420" aria-label="Three classes of points, a test point and a growing window"></svg>
+          <div class="btns"><label class="chk"><input type="checkbox" id="bk-regions"> shade the prediction everywhere</label></div>
+        </div>
+        <div>
+          <div class="btns" style="margin-top:0"><span class="lab">window:</span><div class="seg" id="bk-mode"><button data-m="balloon" class="on">balloon: grow to K points</button><button data-m="fixed">fixed radius</button></div></div>
+          <div class="ctrl" id="bk-krow" style="margin-top:10px"><label for="bk-k">K points</label><input type="range" id="bk-k" min="1" max="40" value="10"><output id="bk-k-o">10</output></div>
+          <div class="ctrl" id="bk-rrow" hidden style="margin-top:10px"><label for="bk-r">radius r</label><input type="range" id="bk-r" min="0.03" max="0.4" step="0.005" value="0.12"><output id="bk-r-o">0.120</output></div>
+          <div class="readout">
+            <div class="stat m"><div class="k">radius</div><div class="v" id="bk-rad">–</div></div>
+            <div class="stat"><div class="k">volume V(x) = πr²</div><div class="v" id="bk-vol">–</div></div>
+            <div class="stat a"><div class="k">points inside</div><div class="v" id="bk-in">–</div></div>
+          </div>
+          <div class="scroll" style="margin-top:12px"><table class="t" id="bk-table"></table></div>
+          <div class="chain" id="bk-chain"></div>
+        </div>
+      </div>
+      <div class="btns"><span class="lab">try:</span><button class="b" data-bk="0.5,0.5,10">Between the clusters</button><button class="b" data-bk="0.82,0.3,10">Near the small class</button><button class="b" data-bk="0.5,0.5,40">K = 40</button></div>
+    </div>
+  </div>
+
+  <div class="block math"><h3 class="blabel"><span class="tag">Math, slowly</span>Equations 16.34 – 16.35</h3>
+    <div class="mathcard">
+      <h4>The class-conditional density</h4>
+      <div class="eq">\[ p(\mathbf x\mid y=c,\mathcal D)=\frac{N_c(\mathbf x)}{N_c\,V(\mathbf x)} \tag{16.34} \]</div>
+      <ol class="steps">
+        <li><div>Start from the boxcar KDE for class \(c\) only: \(\frac{1}{N_c}\sum_{n:y_n=c}\frac{1}{V}\mathbb I(\mathbf x_n\in\text{window})\). <span class="why">In \(D\) dimensions the boxcar has height \(1/V\) so that it integrates to 1; in 1-D, \(V=2h\).</span></div></li>
+        <li><div>The sum counts class-\(c\) points in the window: \(N_c(\mathbf x)\). <span class="why">So the density is \(\frac{N_c(\mathbf x)}{N_cV}\).</span></div></li>
+        <li><div>Balloon twist: the window is the smallest ball around \(\mathbf x\) that holds \(K\) points <i>of any class</i>. <span class="why">Its volume \(V(\mathbf x)\) depends on \(\mathbf x\), and \(\sum_cN_c(\mathbf x)=K\).</span></div></li>
+      </ol>
+
+      <h4>Bayes' rule, term by term</h4>
+      <div class="eq">\[ p(y=c\mid\mathbf x,\mathcal D)=\frac{\dfrac{N_c(\mathbf x)}{N_cV(\mathbf x)}\cdot\dfrac{N_c}{N}}{\sum_{c'}\dfrac{N_{c'}(\mathbf x)}{N_{c'}V(\mathbf x)}\cdot\dfrac{N_{c'}}{N}} =\frac{N_c(\mathbf x)}{\sum_{c'}N_{c'}(\mathbf x)}=\frac{N_c(\mathbf x)}{K}=\frac1K\sum_{n\in N_K(\mathbf x,\mathcal D)}\mathbb I(y_n=c) \tag{16.35} \]</div>
+      <ol class="steps">
+        <li><div>Numerator: \(\frac{N_c(\mathbf x)}{N_cV}\cdot\frac{N_c}{N}=\frac{N_c(\mathbf x)}{NV}\). <span class="why">The class size \(N_c\) cancels against the prior.</span></div></li>
+        <li><div>Every term of the denominator has the same \(\frac{1}{NV}\). <span class="why">Factor it out of top and bottom.</span></div></li>
+        <li><div>\(\sum_{c'}N_{c'}(\mathbf x)=K\). <span class="why">The balloon was grown until it held exactly \(K\) points, whatever their labels.</span></div></li>
+        <li><div>\(N_c(\mathbf x)/K\) is the fraction of the \(K\) nearest neighbors with label \(c\). <span class="why">That's Eq. 16.1, the KNN classifier.</span></div></li>
+      </ol>
+      <p><b>Worked example.</b> \(N=85\), class sizes \(45,25,15\). The balloon with \(K=10\) has radius 0.1, so \(V=\pi(0.1)^2=0.0314\), and holds \(6,3,1\) points. For class 0: \(p(\mathbf x\mid0)=\frac{6}{45\times0.0314}=4.24\), prior \(\frac{45}{85}=0.529\), product \(2.25\). Classes 1 and 2: \(\frac{3}{25\times0.0314}\cdot\frac{25}{85}=1.12\) and \(\frac{1}{15\times0.0314}\cdot\frac{15}{85}=0.375\). Normalize: \(\frac{2.25}{3.75}=0.6=\frac6{10}\).</p>
+      <div class="note">The cancellation needs two things: the prior is the empirical frequency \(N_c/N\), and every class uses the <i>same</i> window. Change either and you get a weighted KNN instead.</div>
+    </div>
+  </div>
+
+  <div class="block quiz"><h3 class="blabel"><span class="tag">Check yourself</span>KDE and KNN</h3><div class="quizbox" data-quiz="knn"></div></div>
+</section>
+
+<!-- ============ 16.3.5.1 Nadaraya-Watson ============ -->
+<section class="sec" id="nw">
+  <div class="sec-head"><span class="secnum">§16.3.5.1</span><h2>Nadaraya-Watson: predict a weighted average of nearby y's</h2></div>
+  <div class="intro">
+    <p>For regression we want the conditional mean \(\mathbb E[y\mid\mathbf x,\mathcal D]\). Model the joint density \(p(\mathbf x,y)\) with a KDE that puts a product kernel on each pair \((\mathbf x_n,y_n)\). Integrate out \(y\), and the kernel facts from §16.3.1 collapse the result to a simple formula: a weighted average of the training outputs, with weights from the kernel in \(\mathbf x\).</p>
+    <p>This is <b>kernel regression</b>, also called <b>kernel smoothing</b> or the <b>Nadaraya-Watson (N-W)</b> model.</p>
+  </div>
+
+  <div class="block lv"><h3 class="blabel"><span class="tag">Explain it</span>At your level</h3>
+    <div class="lvcard" data-lv>
+      <div data-l="1">
+        <p class="big">How warm will it be at your friend's house?</p>
+        <p>You know the temperature at lots of houses around town. To guess for your friend's house, you listen most to houses right next door, a little to houses a few streets away, and not at all to houses across town.</p>
+        <p>Then you take a "listening-weighted" average. If the next-door houses say 70° and a far house says 50°, your guess will be close to 70°.</p>
+        <p>How far you're willing to listen is the bandwidth again. Listen to only the very closest house, and your guess jumps around. Listen to the whole town, and every house gets the same boring guess.</p>
+      </div>
+      <div data-l="2">
+        <p>You have points \((x_n,y_n)\) on a scatter plot. To predict \(y\) at a new \(x\):</p>
+        <ol>
+          <li>Give each training point a weight from the kernel: big if \(x_n\) is close to \(x\), small if far.</li>
+          <li>Divide every weight by the total so the weights add to 1.</li>
+          <li>Prediction = \(\sum_n(\text{weight}_n)\times y_n\), a weighted average.</li>
+        </ol>
+        <p>Slide \(x\) along and repeat, and you trace out a smooth curve through the cloud of points. Small \(h\): the curve chases every point. Large \(h\): it flattens toward the overall average of \(y\).</p>
+      </div>
+      <div data-l="3">
+        <p>With the joint KDE \(p(\mathbf x,y\mid\mathcal D)\approx\frac1N\sum_nK_h(\mathbf x-\mathbf x_n)K_h(y-y_n)\) (Eq. 16.37), the conditional mean is a ratio of integrals over \(y\). Two facts finish it: \(\int yK_h(y-y_n)\,dy=y_n\) (Eq. 16.25) and \(\int K_h(y-y_n)\,dy=1\).</p>
+        <p>Result (Eqs. 16.39–16.40): \(\mu(\mathbf x)=\sum_nw_n(\mathbf x)\,y_n\) with \(w_n(\mathbf x)=K_h(\mathbf x-\mathbf x_n)/\sum_{n'}K_h(\mathbf x-\mathbf x_{n'})\). The weights are nonnegative and sum to 1, so \(\mu(\mathbf x)\) always lies between the smallest and largest \(y_n\).</p>
+        <p>The \(y\)-kernel drops out completely; only the \(\mathbf x\)-bandwidth matters for the mean. If you used a single Gaussian for \(p(\mathbf x,y)\) instead, you'd get linear regression (§11.2.3.5). The KDE removes that linearity restriction.</p>
+      </div>
+      <div data-l="4">
+        <ul>
+          <li><b>A linear smoother.</b> \(\hat{\mathbf y}=S\mathbf y\) with \(S_{mn}=w_n(\mathbf x_m)\), rows summing to 1. Effective degrees of freedom \(=\mathrm{tr}(S)\); leave-one-out CV has the closed form \(\frac1N\sum_m\big(\frac{y_m-\hat y_m}{1-S_{mm}}\big)^2\), so choosing \(h\) is cheap.</li>
+          <li><b>Local constant fit.</b> \(\mu(\mathbf x)=\arg\min_{\beta_0}\sum_n(y_n-\beta_0)^2K_h(\mathbf x-\mathbf x_n)\). §16.3.5.3 upgrades to a local line, which fixes N-W's bias at boundaries and where the design density \(p(\mathbf x)\) changes.</li>
+          <li><b>Bias.</b> For interior points, \(\mathrm{bias}\approx h^2\mu_2(K)\big(\tfrac12m''(x)+\frac{m'(x)p'(x)}{p(x)}\big)\). The second term (design bias) is what local-linear removes.</li>
+          <li><b>Relation to GPs.</b> The GP posterior mean is also linear in \(\mathbf y\), \(\mathbf k_*^\top(K+\sigma^2I)^{-1}\mathbf y\), but its "equivalent kernel" comes from a matrix inverse and can be negative. N-W weights are the kernel itself, normalized (§17.2.3).</li>
+          <li><b>Attention.</b> Softmax attention is N-W with a learned similarity: \(w_n\propto\exp(\mathbf q^\top\mathbf k_n/\sqrt d)\), output \(\sum_nw_n\mathbf v_n\). A Gaussian kernel on \(\lVert\mathbf q-\mathbf k_n\rVert\) with equal-norm keys gives exactly this form.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="block play"><h3 class="blabel"><span class="tag">Play</span>Weighted averages, one query at a time</h3>
+    <div class="panel">
+      <p class="hint">Like Figure 16.10: noisy samples of a known curve (dashed). <b>Click or drag</b> on the plot to move the query \(x^*\). Dot sizes show each point's weight \(w_n(x^*)\); the kernel \(K_h(x^*-x)\) is drawn along the bottom. The purple curve is \(\mu(x)\) for every \(x\).</p>
+      <div class="two">
+        <div><svg class="plot drag" id="nw-svg" viewBox="0 0 440 340" aria-label="Kernel regression on noisy data"></svg></div>
+        <div>
+          <div class="btns" style="margin-top:0"><span class="lab">kernel:</span><div class="seg" id="nw-k"><button data-k="box">Boxcar</button><button data-k="epa">Epa.</button><button data-k="tri">Tri-cube</button><button data-k="gau" class="on">Gaussian</button></div></div>
+          <div class="ctrl" style="margin-top:10px"><label for="nw-h">bandwidth h</label><input type="range" id="nw-h" min="0.02" max="1" step="0.01" value="0.12"><output id="nw-h-o">0.12</output></div>
+          <div class="ctrl"><label for="nw-n">N points</label><input type="range" id="nw-n" min="10" max="150" step="5" value="40"><output id="nw-n-o">40</output></div>
+          <div class="ctrl"><label for="nw-s">noise sd</label><input type="range" id="nw-s" min="0" max="0.4" step="0.01" value="0.1"><output id="nw-s-o">0.10</output></div>
+          <div class="btns"><button class="b" id="nw-new">New sample</button></div>
+          <div class="readout">
+            <div class="stat m"><div class="k">µ(x*)</div><div class="v" id="nw-mu">–</div></div>
+            <div class="stat"><div class="k">true f(x*)</div><div class="v" id="nw-f">–</div></div>
+            <div class="stat a"><div class="k">effective # points 1/Σw²</div><div class="v" id="nw-eff">–</div></div>
+          </div>
+        </div>
+      </div>
+      <p class="cap" style="margin-top:14px">the biggest weights at x* (Eqs. 16.39–16.40)</p>
+      <div class="scroll"><table class="t" id="nw-table"></table></div>
+    </div>
+  </div>
+
+  <div class="block math"><h3 class="blabel"><span class="tag">Math, slowly</span>Equations 16.36 – 16.40</h3>
+    <div class="mathcard">
+      <h4>The goal: a conditional mean</h4>
+      <div class="eq">\[ \mathbb E[y\mid\mathbf x,\mathcal D]=\int y\,p(y\mid\mathbf x,\mathcal D)\,dy=\frac{\int y\,p(\mathbf x,y\mid\mathcal D)\,dy}{\int p(\mathbf x,y\mid\mathcal D)\,dy} \tag{16.36} \]</div>
+      <p>The second form uses \(p(y\mid\mathbf x)=p(\mathbf x,y)/p(\mathbf x)\) and \(p(\mathbf x)=\int p(\mathbf x,y)\,dy\). So all we need is a model of the joint density.</p>
+
+      <h4>A KDE for the joint</h4>
+      <div class="eq">\[ p(y,\mathbf x\mid\mathcal D)\approx\frac1N\sum_{n=1}^{N}K_h(\mathbf x-\mathbf x_n)\,K_h(y-y_n) \tag{16.37} \]</div>
+      <p>One product kernel per training pair. Plug it into both integrals of 16.36 and move the \(y\)-free factor \(K_h(\mathbf x-\mathbf x_n)\) outside each integral:</p>
+      <div class="eq">\[ \mathbb E[y\mid\mathbf x,\mathcal D]=\frac{\frac1N\sum_{n}K_h(\mathbf x-\mathbf x_n)\,\class{tm}{\int y\,K_h(y-y_n)\,dy}}{\frac1N\sum_{n'}K_h(\mathbf x-\mathbf x_{n'})\,\class{tg}{\int K_h(y-y_{n'})\,dy}} \tag{16.38} \]</div>
+      <ol class="steps">
+        <li><div><span class="tm">\(\int yK_h(y-y_n)\,dy=y_n\)</span>. <span class="why">Eq. 16.25: a symmetric kernel centered at \(y_n\) has mean \(y_n\).</span></div></li>
+        <li><div><span class="tg">\(\int K_h(y-y_{n'})\,dy=1\)</span>. <span class="why">Density kernels integrate to 1.</span></div></li>
+        <li><div>The \(\frac1N\) cancels between top and bottom. <span class="why">What's left:</span></div></li>
+      </ol>
+      <div class="eq">\[ \mathbb E[y\mid\mathbf x,\mathcal D]=\frac{\sum_{n}K_h(\mathbf x-\mathbf x_n)\,y_n}{\sum_{n'}K_h(\mathbf x-\mathbf x_{n'})}=\sum_{n=1}^{N}y_n\,w_n(\mathbf x) \tag{16.39} \]</div>
+      <div class="eq">\[ w_n(\mathbf x)\triangleq\frac{K_h(\mathbf x-\mathbf x_n)}{\sum_{n'=1}^{N}K_h(\mathbf x-\mathbf x_{n'})} \tag{16.40} \]</div>
+      <p><b>Worked example.</b> Three points with kernel values \(K_h(x-x_n)=2,1,1\) and outputs \(y_n=3,0,6\). Weights: \(\frac24,\frac14,\frac14\). Prediction: \(0.5\cdot3+0.25\cdot0+0.25\cdot6=3\).</p>
+      <div class="note">With a compact kernel and small \(h\), a query with no training points within \(h\) has denominator 0, and \(\mu(\mathbf x)\) is undefined. Try the boxcar with \(h=0.02\) in the Play box: the curve breaks into pieces.</div>
+    </div>
+  </div>
+
+  <div class="block quiz"><h3 class="blabel"><span class="tag">Check yourself</span>Nadaraya-Watson</h3><div class="quizbox" data-quiz="nw"></div></div>
+</section>
+
+<!-- ============ 16.3.5.2 Variance ============ -->
+<section class="sec" id="var">
+  <div class="sec-head"><span class="secnum">§16.3.5.2</span><h2>The predictive variance: how spread out are the nearby y's?</h2></div>
+  <div class="intro">
+    <p>The same joint KDE gives more than a mean. Use \(\mathbb V[y\mid\mathbf x]=\mathbb E[y^2\mid\mathbf x]-\mu(\mathbf x)^2\), and with a Gaussian \(y\)-kernel of variance \(\sigma^2\) the answer is \(\sigma^2\) plus the <b>weighted variance</b> of the neighbors' outputs (Eq. 16.45).</p>
+  </div>
+
+  <div class="block lv"><h3 class="blabel"><span class="tag">Explain it</span>At your level</h3>
+    <div class="lvcard" data-lv>
+      <div data-l="1">
+        <p class="big">Do the nearby houses agree?</p>
+        <p>If all the houses next to your friend's say 70°, you can be pretty sure it's about 70° there. If one says 60° and another says 80°, your best guess is still 70°, but you should say "somewhere between 60 and 80."</p>
+        <p>So besides a guess, we can give a "how sure am I" range. It's wide where the neighbors disagree and narrow where they agree.</p>
+      </div>
+      <div data-l="2">
+        <p>Variance measures spread. The formula "average of the squares minus the square of the average" works for any list of numbers. Here we use the <i>weighted</i> average, with the same kernel weights as the prediction.</p>
+        <p>Example: two neighbors with equal weight and \(y=0\) and \(y=2\). Average = 1, average of squares = 2, so the spread is \(2-1^2=1\).</p>
+        <p>The book adds one more piece, \(\sigma^2\), the width of the little bump placed on each \(y_n\). It's the same everywhere, so it just widens the band evenly.</p>
+        <p>Plot the prediction ± 2 standard deviations, and you get a band that's wide where the data are noisy and narrow where they're tight.</p>
+      </div>
+      <div data-l="3">
+        <p>\(\mathbb E[y^2\mid\mathbf x]\) uses the same ratio as 16.38, but with \(\int y^2\mathcal N(y\mid y_n,\sigma^2)\,dy=\sigma^2+y_n^2\) in the numerator (second moment = variance + mean²). That gives \(\sum_nw_n(\sigma^2+y_n^2)=\sigma^2+\sum_nw_ny_n^2\).</p>
+        <p>So \(\mathbb V[y\mid\mathbf x]=\sigma^2+\sum_nw_ny_n^2-\mu^2\). The last two terms are \(\sum_nw_n(y_n-\mu)^2\ge0\): the weighted variance of the outputs. This matches Eq. 8 of [BA10] up to the \(\sigma^2\) term.</p>
+        <p>This is a <i>heteroscedastic</i> noise estimate: the band changes width with \(\mathbf x\). Try the "noise grows with x" data.</p>
+      </div>
+      <div data-l="4">
+        <ul>
+          <li><b>What it measures.</b> \(\mathbb V[y\mid\mathbf x]\) is the predictive variance of a new \(y\) (aleatoric noise plus local curvature smeared in by the window). It is <i>not</i> the variance of \(\hat\mu(\mathbf x)\) as an estimator, which is about \(\sum_nw_n^2\sigma^2(\mathbf x_n)\), i.e. noise ÷ effective sample size.</li>
+          <li><b>Bias inflation.</b> Where \(m(\mathbf x)\) curves inside the window, \(\sum w_n(y_n-\mu)^2\) picks up \(m\)'s variation as if it were noise. Large \(h\) overstates the variance near peaks.</li>
+          <li><b>The \(\sigma^2\) term.</b> With a non-Gaussian \(y\)-kernel, replace \(\sigma^2\) by \(h_y^2\mu_2(K)\). As \(h_y\to0\) it vanishes, which is why [BA10] omits it.</li>
+          <li><b>Practice.</b> Common alternatives: smooth the squared residuals \((y_n-\hat\mu(\mathbf x_n))^2\) with a second kernel smoother, or use local likelihood / quantile regression for asymmetric noise.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="block play"><h3 class="blabel"><span class="tag">Play</span>A band that follows the noise</h3>
+    <div class="panel">
+      <p class="hint">The shaded band is \(\mu(x)\pm2\sqrt{\mathbb V[y\mid x]}\) using a Gaussian kernel in \(x\) with bandwidth \(h\) and a Gaussian kernel in \(y\) with standard deviation \(\sigma\). The dashed lines show the true ±2 sd noise band. <b>Click or drag</b> to move the query and see Eq. 16.45 term by term.</p>
+      <div class="two">
+        <div><svg class="plot drag" id="vr-svg" viewBox="0 0 440 340" aria-label="Kernel regression with a predictive variance band"></svg></div>
+        <div>
+          <div class="btns" style="margin-top:0"><span class="lab">noise:</span><div class="seg" id="vr-d"><button data-d="const">constant</button><button data-d="grow" class="on">grows with x</button></div></div>
+          <div class="ctrl" style="margin-top:10px"><label for="vr-h">bandwidth h</label><input type="range" id="vr-h" min="0.03" max="0.8" step="0.01" value="0.15"><output id="vr-h-o">0.15</output></div>
+          <div class="ctrl"><label for="vr-sg">y-kernel σ</label><input type="range" id="vr-sg" min="0" max="0.3" step="0.01" value="0.05"><output id="vr-sg-o">0.05</output></div>
+          <div class="btns"><button class="b" id="vr-new">New sample</button></div>
+          <div class="readout">
+            <div class="stat m"><div class="k">µ(x*)</div><div class="v" id="vr-mu">–</div></div>
+            <div class="stat a"><div class="k">V[y | x*]</div><div class="v" id="vr-v">–</div></div>
+            <div class="stat b"><div class="k">2·sd</div><div class="v" id="vr-sd">–</div></div>
+          </div>
+          <div class="chain" id="vr-chain"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="block math"><h3 class="blabel"><span class="tag">Math, slowly</span>Equations 16.41 – 16.45</h3>
+    <div class="mathcard">
+      <div class="eq">\[ \mathbb V[y\mid\mathbf x,\mathcal D]=\mathbb E\big[y^2\mid\mathbf x,\mathcal D\big]-\mu(\mathbf x)^2 \tag{16.41} \]</div>
+      <p>This is the usual "mean of the square minus square of the mean," with \(\mu(\mathbf x)\) the N-W estimate.</p>
+      <h4>The second moment</h4>
+      <div class="eq">\[ \mathbb E\big[y^2\mid\mathbf x,\mathcal D\big]=\frac{\sum_{n}K_h(\mathbf x-\mathbf x_n)\int y^2K_h(y-y_n)\,dy}{\sum_{n'}K_h(\mathbf x-\mathbf x_{n'})\int K_h(y-y_{n'})\,dy} \tag{16.42} \]</div>
+      <ol class="steps">
+        <li><div>Same derivation as 16.38, with \(y^2\) in place of \(y\). <span class="why">The denominator integral is still 1.</span></div></li>
+        <li><div>With a Gaussian \(y\)-kernel of variance \(\sigma^2\):
+          \[ \int y^2\,\mathcal N(y\mid y_n,\sigma^2)\,dy=\sigma^2+y_n^2 \tag{16.44} \]
+          <span class="why">For any random variable, \(\mathbb E[y^2]=\mathbb V[y]+(\mathbb E[y])^2\).</span></div></li>
+        <li><div>Substitute:
+          \[ \mathbb E\big[y^2\mid\mathbf x,\mathcal D\big]=\frac{\sum_nK_h(\mathbf x-\mathbf x_n)(\sigma^2+y_n^2)}{\sum_{n'}K_h(\mathbf x-\mathbf x_{n'})}=\sigma^2+\sum_nw_n(\mathbf x)\,y_n^2 \tag{16.43} \]
+          <span class="why">The weights sum to 1, so the \(\sigma^2\) comes out on its own.</span></div></li>
+      </ol>
+      <h4>The variance</h4>
+      <div class="eq">\[ \mathbb V[y\mid\mathbf x,\mathcal D]=\sigma^2+\sum_{n=1}^{N}w_n(\mathbf x)\,y_n^2-\mu(\mathbf x)^2 \tag{16.45} \]</div>
+      <p>Because \(\sum_nw_n=1\) and \(\mu=\sum_nw_ny_n\), the last two terms equal \(\sum_nw_n(y_n-\mu)^2\), so they are never negative:</p>
+      <div class="eq">\[ \sum_nw_n(y_n-\mu)^2=\sum_nw_ny_n^2-2\mu\sum_nw_ny_n+\mu^2\sum_nw_n=\sum_nw_ny_n^2-2\mu^2+\mu^2 \]</div>
+      <p><b>Worked example.</b> \(\sigma^2=0.1\), two neighbors with \(w=0.5\) each and \(y=0,2\). Then \(\mu=1\), \(\sum w_ny_n^2=2\), and \(\mathbb V=0.1+2-1=1.1\).</p>
+    </div>
+  </div>
+
+  <div class="block quiz"><h3 class="blabel"><span class="tag">Check yourself</span>Predictive variance</h3><div class="quizbox" data-quiz="var"></div></div>
+</section>
+
+<!-- ============ 16.3.5.3 LOWESS ============ -->
+<section class="sec" id="loess">
+  <div class="sec-head"><span class="secnum">§16.3.5.3</span><h2>Locally weighted regression: fit a small line at every x</h2></div>
+  <div class="intro">
+    <p>Nadaraya-Watson predicts a weighted <i>average</i> of nearby outputs, a local constant. If the data have a slope, an average is pulled toward whichever side has more data, which is a big problem at the edges. <b>Locally linear regression</b> (<b>LOWESS</b> or <b>LOESS</b>) fits a weighted least-squares line around each query and reports its value at the query.</p>
+    <p>The book first notes the unnormalized version, Eq. 16.46, which just drops the denominator from N-W. The Play box shows why that denominator matters.</p>
+  </div>
+
+  <div class="block lv"><h3 class="blabel"><span class="tag">Explain it</span>At your level</h3>
+    <div class="lvcard" data-lv>
+      <div data-l="1">
+        <p class="big">Guessing how tall a hill is at the very edge of the map.</p>
+        <p>You only have measurements to your left, because the map ends on your right. If you just average them, you get the height of the land behind you, which is lower than where you're standing on the slope.</p>
+        <p>A smarter trick: look at the nearby measurements, notice "it's going uphill," and follow that slope to your spot. That's what locally weighted regression does: draw a short straight line through the nearby points and read off its height where you are.</p>
+      </div>
+      <div data-l="2">
+        <p>N-W regression is "average the nearby \(y\)'s." LOWESS is "fit a best-fit line to the nearby points, counting close points more, and use the line's value at \(x\)."</p>
+        <p>In the middle of the data, the nearby points are balanced on both sides, so the two methods mostly agree. At the edges, they're all on one side. The average then lags behind the trend, while the line keeps going in the right direction.</p>
+        <p>You see LOWESS all the time as the smooth trend line drawn on top of scatter plots.</p>
+      </div>
+      <div data-l="3">
+        <p>At query \(\mathbf x\), solve the weighted least-squares problem \(\hat{\boldsymbol\beta}(\mathbf x)=\arg\min_{\boldsymbol\beta}\sum_n[y_n-\boldsymbol\beta^\top\boldsymbol\phi(\mathbf x_n)]^2K_h(\mathbf x-\mathbf x_n)\) with \(\boldsymbol\phi(x)=[1,x]\), then predict \(\mu(\mathbf x)=\hat{\boldsymbol\beta}(\mathbf x)^\top\boldsymbol\phi(\mathbf x)\). (Eq. 16.47 writes this compactly as a min; the prediction is the fitted line evaluated at \(\mathbf x\).)</p>
+        <p>With \(\boldsymbol\phi(x)=[1]\), the same problem gives \(\beta_0=\sum_nw_ny_n\): that's N-W. So N-W is local-constant regression and LOWESS is local-linear.</p>
+        <p>Eq. 16.46, \(\sum_ny_nK_h(\mathbf x-\mathbf x_n)\), skips dividing by \(\sum_nK_h\). Since \(\sum_nK_h(\mathbf x-\mathbf x_n)=N\hat p(\mathbf x)\), it equals \(N\hat p(\mathbf x)\,\mu(\mathbf x)\): the regression curve multiplied by the data density. It sags toward 0 wherever data are sparse.</p>
+      </div>
+      <div data-l="4">
+        <ul>
+          <li><b>Closed form.</b> \(\hat{\boldsymbol\beta}(\mathbf x)=(\Phi^\top W_{\mathbf x}\Phi)^{-1}\Phi^\top W_{\mathbf x}\mathbf y\), \(W_{\mathbf x}=\mathrm{diag}(K_h(\mathbf x-\mathbf x_n))\). Still a linear smoother in \(\mathbf y\), but the equivalent weights can be negative, which is how it extrapolates the trend.</li>
+          <li><b>Bias.</b> Local-linear bias \(\approx\frac{h^2}2\mu_2(K)m''(x)\), with no design-bias term and the same order at boundaries as in the interior (Fan, 1992). It is minimax-efficient among linear smoothers. Local polynomials of odd degree are generally preferred.</li>
+          <li><b>Cleveland's LOWESS [CD88]</b> uses the tri-cube kernel with a nearest-neighbor bandwidth (the span: fraction of points in each window), plus a few robustness iterations that downweight points with large residuals via bisquare weights.</li>
+          <li><b>Cost.</b> Naively one \(O(ND^2+D^3)\) solve per query; implementations evaluate on a grid of vertices and interpolate.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="block play"><h3 class="blabel"><span class="tag">Play</span>Local constant vs local line</h3>
+    <div class="panel">
+      <p class="hint">The data follow a rising trend (dashed). Blue is Nadaraya-Watson (local constant), purple is locally linear. <b>Click or drag</b> to move the query: the short purple segment is the weighted line fitted there, and the dot sizes are the weights. Move the query to the left or right edge and compare the two predictions.</p>
+      <div class="two">
+        <div><svg class="plot drag" id="lw-svg" viewBox="0 0 440 340" aria-label="Nadaraya-Watson and locally linear regression compared"></svg></div>
+        <div>
+          <div class="btns" style="margin-top:0"><span class="lab">kernel:</span><div class="seg" id="lw-k"><button data-k="epa">Epa.</button><button data-k="tri" class="on">Tri-cube</button><button data-k="gau">Gaussian</button></div></div>
+          <div class="ctrl" style="margin-top:10px"><label for="lw-h">bandwidth h</label><input type="range" id="lw-h" min="0.05" max="1" step="0.01" value="0.3"><output id="lw-h-o">0.30</output></div>
+          <div class="btns"><label class="chk"><input type="checkbox" id="lw-un"> show Eq. 16.46 (no denominator), ÷N</label></div>
+          <div class="btns"><button class="b" id="lw-new">New sample</button><button class="b" id="lw-edge">Query at the right edge</button></div>
+          <div class="readout">
+            <div class="stat"><div class="k">true f(x*)</div><div class="v" id="lw-f">–</div></div>
+            <div class="stat b"><div class="k">N-W µ(x*)</div><div class="v" id="lw-nw">–</div></div>
+            <div class="stat m"><div class="k">local linear µ(x*)</div><div class="v" id="lw-ll">–</div></div>
+          </div>
+          <div class="chain" id="lw-chain"></div>
+        </div>
+      </div>
+      <div class="readout">
+        <div class="stat b"><div class="k">N-W mean squared error vs truth</div><div class="v" id="lw-mse-nw">–</div></div>
+        <div class="stat m"><div class="k">local linear mean squared error</div><div class="v" id="lw-mse-ll">–</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="block math"><h3 class="blabel"><span class="tag">Math, slowly</span>Equations 16.46 – 16.47</h3>
+    <div class="mathcard">
+      <h4>Dropping the normalization</h4>
+      <div class="eq">\[ \mu(\mathbf x)=\sum_{n=1}^{N}y_n\,K_h(\mathbf x-\mathbf x_n) \tag{16.46} \]</div>
+      <p>Compare with N-W: \(\sum_ny_nK_h(\mathbf x-\mathbf x_n)=\Big(\sum_{n'}K_h(\mathbf x-\mathbf x_{n'})\Big)\cdot\mu_{\text{NW}}(\mathbf x)=N\,\hat p(\mathbf x)\,\mu_{\text{NW}}(\mathbf x)\), where \(\hat p\) is the KDE of the inputs. So 16.46 is a weighted sum of responses whose overall size depends on how much data is nearby. The checkbox plots it divided by \(N\), i.e. \(\hat p(x)\,\mu_{\text{NW}}(x)\).</p>
+
+      <h4>A line at every query</h4>
+      <div class="eq">\[ \mu(\mathbf x)=\min_{\boldsymbol\beta}\sum_{n=1}^{N}\big[y_n-\boldsymbol\beta^\top\boldsymbol\phi(\mathbf x_n)\big]^2K_h(\mathbf x-\mathbf x_n),\qquad\boldsymbol\phi(x)=[1,x] \tag{16.47} \]</div>
+      <p>Read this as: find the \(\hat{\boldsymbol\beta}(\mathbf x)\) that minimizes the weighted squared error, then predict \(\hat\beta_0+\hat\beta_1x\). In 1-D, write \(k_n=K_h(x-x_n)\) and the weighted sums</p>
+      <div class="eq">\[ S_0=\sum k_n,\quad S_1=\sum k_nx_n,\quad S_2=\sum k_nx_n^2,\quad T_0=\sum k_ny_n,\quad T_1=\sum k_nx_ny_n \]</div>
+      <ol class="steps">
+        <li><div>Set the derivatives with respect to \(\beta_0\) and \(\beta_1\) to 0. <span class="why">The normal equations of weighted least squares:</span>
+          \[ \begin{pmatrix}S_0&S_1\\S_1&S_2\end{pmatrix}\begin{pmatrix}\beta_0\\\beta_1\end{pmatrix}=\begin{pmatrix}T_0\\T_1\end{pmatrix} \]</div></li>
+        <li><div>Solve the 2×2 system: \(\hat\beta_1=\dfrac{S_0T_1-S_1T_0}{S_0S_2-S_1^2}\), \(\hat\beta_0=\dfrac{T_0-\hat\beta_1S_1}{S_0}\). <span class="why">\(\hat\beta_1\) is the weighted covariance of \(x\) and \(y\) over the weighted variance of \(x\).</span></div></li>
+        <li><div>Predict \(\mu(x)=\hat\beta_0+\hat\beta_1x\). <span class="why">The Play box does exactly this at every pixel.</span></div></li>
+        <li><div>Drop the slope (\(\boldsymbol\phi=[1]\)): the single equation \(S_0\beta_0=T_0\) gives \(\beta_0=T_0/S_0=\sum_nw_ny_n\). <span class="why">That's Nadaraya-Watson, Eq. 16.39.</span></div></li>
+      </ol>
+      <h4>Why the line wins at the edges</h4>
+      <p>At the right edge every neighbor has \(x_n<x\). If \(y\) is rising, every neighbor's \(y_n\) is below \(f(x)\), so any weighted average is too low: that's <b>boundary bias</b>, and it is of order \(h\). The local line uses the slope among the neighbors to extrapolate the last bit, so its bias is of order \(h^2\), the same as in the interior.</p>
+    </div>
+  </div>
+
+  <div class="block quiz"><h3 class="blabel"><span class="tag">Check yourself</span>Locally weighted regression</h3><div class="quizbox" data-quiz="loess"></div></div>
+</section>
+
+<!-- ============ Cheat sheet ============ -->
+<section class="sec" id="cheat">
+  <div class="sec-head"><span class="secnum">—</span><h2>Cheat sheet</h2></div>
+  <div class="block">
+    <div class="panel scroll">
+      <table class="vs">
+        <thead><tr><th></th><th>In words</th><th>In symbols</th></tr></thead>
+        <tbody>
+          <tr><th>Density kernel</th><td>A symmetric pdf centered at 0.</td><td>\(K\ge0,\ \int K=1,\ K(-x)=K(x)\)</td></tr>
+          <tr><th>16.25</th><td>A kernel centered at \(x_n\) has mean \(x_n\).</td><td>\(\int xK(x-x_n)\,dx=x_n\)</td></tr>
+          <tr><th>Bandwidth (16.28)</th><td>Stretch by \(h\), squash by \(1/h\); area stays 1.</td><td>\(K_h(x)=\frac1hK(\frac xh)\)</td></tr>
+          <tr><th>Kernels</th><td>Boxcar, Epanechnikov, tri-cube (compact); Gaussian (smooth, unbounded).</td><td>\(\frac12,\ \frac34(1-x^2),\ \frac{70}{81}(1-|x|^3)^3,\ \frac{e^{-x^2/2}}{\sqrt{2\pi}}\)</td></tr>
+          <tr><th>RBF (16.29–16.30)</th><td>Depends only on \(\lVert\mathbf x\rVert\); the Gaussian factors over dimensions.</td><td>\(\mathcal N(\mathbf 0,h^2I)\)</td></tr>
+          <tr><th>KDE (16.33)</th><td>Average of one kernel per point. GMM with one cluster per point.</td><td>\(p(\mathbf x\mid\mathcal D)=\frac1N\sum_nK_h(\mathbf x-\mathbf x_n)\)</td></tr>
+          <tr><th>Sampling</th><td>Pick a point at random, add kernel noise.</td><td>\(\mathbf x_n+h\boldsymbol\epsilon,\ \boldsymbol\epsilon\sim K\)</td></tr>
+          <tr><th>Cost</th><td>No training; store all data; \(O(ND)\) per evaluation.</td><td>memory \(O(ND)\)</td></tr>
+          <tr><th>Bandwidth rule</th><td>Optimal for Gaussian data + Gaussian kernel; \(h\propto N^{-1/5}\).</td><td>\(h=\sigma(\frac{4}{3N})^{1/5}\approx1.06\sigma N^{-1/5}\)</td></tr>
+          <tr><th>Robust σ</th><td>Median absolute deviation, rescaled.</td><td>\(\hat\sigma=1.4826\,\mathrm{median}(|x-\mathrm{median}(x)|)\)</td></tr>
+          <tr><th>D dims</th><td>Geometric mean of per-dimension bandwidths.</td><td>\(h=(\prod_dh_d)^{1/D}\)</td></tr>
+          <tr><th>Balloon KDE (16.34)</th><td>Grow a window until it holds \(K\) points.</td><td>\(p(\mathbf x\mid c)=\frac{N_c(\mathbf x)}{N_cV(\mathbf x)}\)</td></tr>
+          <tr><th>KNN (16.35)</th><td>Bayes' rule with prior \(N_c/N\); \(N_c\) and \(V\) cancel.</td><td>\(p(y=c\mid\mathbf x)=\frac{N_c(\mathbf x)}{K}\)</td></tr>
+          <tr><th>N-W (16.39–16.40)</th><td>Weighted average of training outputs; local constant fit.</td><td>\(\mu(\mathbf x)=\sum_nw_n(\mathbf x)y_n,\ w_n\propto K_h(\mathbf x-\mathbf x_n)\)</td></tr>
+          <tr><th>Variance (16.45)</th><td>\(y\)-kernel width plus weighted spread of nearby outputs.</td><td>\(\sigma^2+\sum_nw_ny_n^2-\mu^2\)</td></tr>
+          <tr><th>16.46</th><td>No denominator: equals \(N\hat p(\mathbf x)\mu(\mathbf x)\).</td><td>\(\sum_ny_nK_h(\mathbf x-\mathbf x_n)\)</td></tr>
+          <tr><th>LOWESS (16.47)</th><td>Weighted least-squares line at each query; fixes boundary bias.</td><td>\(\min_{\boldsymbol\beta}\sum_n[y_n-\boldsymbol\beta^\top\boldsymbol\phi(\mathbf x_n)]^2K_h(\mathbf x-\mathbf x_n)\)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <footer>Built as a study companion for Murphy, <i>Probabilistic Machine Learning: An Introduction</i> (MIT Press, CC-BY-NC-ND), §16.3. All datasets on this page are synthetic, generated in the page from fixed seeds; the six points in §16.3.2 are the ones used in Figure 16.9.</footer>
+</section>
+</main>
+</div>
+
+<script>
+(function () {
+
+/* ---------- helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function txt(parent, x, y, s, cls, extra) { const t = el('text', Object.assign({ x, y, class: cls || 'ax' }, extra || {}), parent); t.textContent = s; return t; }
+const lin = (d0, d1, r0, r1) => v => r0 + (v - d0) / (d1 - d0) * (r1 - r0);
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const neg = s => String(s).replace(/^-/, '−');
+const f2 = v => neg((Math.abs(v) < 5e-3 ? 0 : v).toFixed(2)), f3 = v => neg((Math.abs(v) < 5e-4 ? 0 : v).toFixed(3));
+const pct = v => (100 * v).toFixed(1) + '%';
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const pathOf = pts => pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join('');
+const svgPt = (svg, evt) => { const p = svg.createSVGPoint(); p.x = evt.clientX; p.y = evt.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+function rng(s) { return () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function gauss(r) { let u = 0; while (!u) u = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * r()); }
+const hexRgb = h => { h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+const renderers = [];
+const CL = ['--c0', '--c1', '--c2', '--c3', '--c4', '--c5', '--c6', '--c7'];
+const cvar = i => `var(${CL[i % CL.length]})`;
+const crgb = i => hexRgb(cssv(CL[i % CL.length]));
+
+// plot frame: maps data → svg coords inside a padded box
+function frame(o) {
+  const L = o.l, R = o.W - o.r, T = o.t, B = o.H - o.b;
+  return { L, R, T, B, X: lin(o.x[0], o.x[1], L, R), Y: lin(o.y[0], o.y[1], B, T), iX: lin(L, R, o.x[0], o.x[1]), iY: lin(B, T, o.y[0], o.y[1]) };
+}
+function axes(svg, f, o) {
+  (o.xt || []).forEach(v => { el('line', { x1: f.X(v), x2: f.X(v), y1: f.T, y2: f.B, class: 'gridl' }, svg); txt(svg, f.X(v), f.B + 15, (o.fx || String)(v), 'ax', { 'text-anchor': 'middle' }); });
+  (o.yt || []).forEach(v => { el('line', { x1: f.L, x2: f.R, y1: f.Y(v), y2: f.Y(v), class: 'gridl' }, svg); txt(svg, f.L - 6, f.Y(v) + 4, (o.fy || String)(v), 'ax', { 'text-anchor': 'end' }); });
+  el('line', { x1: f.L, x2: f.R, y1: f.B, y2: f.B, class: 'base' }, svg);
+  el('line', { x1: f.L, x2: f.L, y1: f.T, y2: f.B, class: 'base' }, svg);
+  if (o.xl) txt(svg, (f.L + f.R) / 2, f.B + 31, o.xl, 'axl', { 'text-anchor': 'middle' });
+  if (o.yl) txt(svg, f.L - 34, (f.T + f.B) / 2, o.yl, 'axl', { 'text-anchor': 'middle', transform: `rotate(-90 ${f.L - 34} ${(f.T + f.B) / 2})` });
+}
+// rasterize fill(u, v) over the frame's data box; u, v in [0, 1] measured from bottom-left
+function raster(svg, f, gw, gh, fill) {
+  const cv = document.createElement('canvas'); cv.width = gw; cv.height = gh;
+  const ctx = cv.getContext('2d'), im = ctx.createImageData(gw, gh);
+  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+    const c = fill((i + .5) / gw, 1 - (j + .5) / gh), k = 4 * (j * gw + i);
+    if (!c) continue;
+    im.data[k] = c[0]; im.data[k + 1] = c[1]; im.data[k + 2] = c[2]; im.data[k + 3] = Math.round(255 * c[3]);
+  }
+  ctx.putImageData(im, 0, 0);
+  return el('image', { x: f.L, y: f.T, width: f.R - f.L, height: f.B - f.T, href: cv.toDataURL(), preserveAspectRatio: 'none' }, svg);
+}
+function arrow(g, x1, y1, x2, y2, color, w) {
+  w = w || 2;
+  const a = Math.atan2(y2 - y1, x2 - x1), h = 6 + 1.5 * w;
+  el('line', { x1, y1, x2: x2 - .6 * h * Math.cos(a), y2: y2 - .6 * h * Math.sin(a), stroke: color, 'stroke-width': w }, g);
+  el('polygon', { points: [[x2, y2], [x2 - h * Math.cos(a - .42), y2 - h * Math.sin(a - .42)], [x2 - h * Math.cos(a + .42), y2 - h * Math.sin(a + .42)]].map(q => q.map(v => v.toFixed(1)).join(',')).join(' '), fill: color }, g);
+}
+function cross(g, x, y, s) {
+  s = s || 7; const d = `M${x - s},${y - s}L${x + s},${y + s}M${x - s},${y + s}L${x + s},${y - s}`;
+  el('path', { d, stroke: 'var(--surface)', 'stroke-width': 7, 'stroke-linecap': 'round' }, g);
+  el('path', { d, stroke: 'var(--ink)', 'stroke-width': 3, 'stroke-linecap': 'round' }, g);
+}
+function onDrag(svg, down, move, up) {
+  let active = false;
+  svg.addEventListener('pointerdown', e => { if (e.button > 0) return; const r = down(svgPt(svg, e), e); if (r === false) return; active = true; svg.setPointerCapture(e.pointerId); e.preventDefault(); });
+  svg.addEventListener('pointermove', e => { if (active) move(svgPt(svg, e), e); });
+  const end = () => { if (active) { active = false; if (up) up(); } };
+  svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
+}
+function slider(id, fmt, cb) {
+  const s = $('#' + id), o = $('#' + id + '-o');
+  const go = () => { o.textContent = fmt(+s.value); if (cb) cb(+s.value); };
+  s.addEventListener('input', go); o.textContent = fmt(+s.value);
+  return { get v() { return +s.value; }, set(v) { s.value = v; o.textContent = fmt(+s.value); } };
+}
+function segm(id, cb) {
+  const s = $('#' + id);
+  s.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; $$('button', s).forEach(x => x.classList.toggle('on', x === b)); cb(b); });
+}
+function bars(node, rows) {
+  node.innerHTML = rows.map(r => `<div class="r"><span style="color:${r.color};font-weight:600">${r.label}</span><div class="bar"><i style="width:${(100 * r.p).toFixed(1)}%;background:${r.color}"></i></div><span class="v">${pct(r.p)}</span></div>`).join('');
+}
+function blobs(seed, spec, n, sd) {
+  const r = rng(seed), out = [];
+  spec.forEach((cs, c) => { for (let i = 0; i < n; i++) { const m = cs[i % cs.length]; out.push({ x: clamp(m[0] + sd * gauss(r), .02, .98), y: clamp(m[1] + sd * gauss(r), .02, .98), c }); } });
+  return out;
+}
+// majority vote over an ordered neighbor list; ties go to the nearest tied label
+function vote(labels, C) {
+  const cnt = new Array(C).fill(0); labels.forEach(c => cnt[c]++);
+  const mx = Math.max(...cnt), tied = cnt.filter(v => v === mx).length > 1;
+  return { cnt, lab: labels.find(c => cnt[c] === mx), tied };
+}
+
+/* ---------- levels ---------- */
+const LEVELS = { 1: 'Kid', 2: 'High school', 3: 'Undergrad', 4: 'Grad / MLE' };
+let level = 3;
+try { const s = localStorage.getItem('kde-lab-level'); if (s && LEVELS[s]) level = +s; } catch (e) {}
+$$('[data-lv]').forEach(card => {
+  const kids = [...card.children];
+  const tabs = document.createElement('div'); tabs.className = 'lvtabs'; tabs.setAttribute('role', 'tablist');
+  tabs.innerHTML = Object.entries(LEVELS).map(([k, v]) => `<button role="tab" data-tab="${k}">${v}</button>`).join('');
+  const body = document.createElement('div'); body.className = 'lvbody';
+  kids.forEach(k => body.appendChild(k));
+  card.appendChild(tabs); card.appendChild(body);
+  tabs.addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) showCard(card, +b.dataset.tab); });
+});
+function showCard(card, l) {
+  $$('.lvbody > [data-l]', card).forEach(d => { d.hidden = +d.dataset.l !== l; });
+  $$('[data-tab]', card).forEach(b => { b.classList.toggle('on', +b.dataset.tab === l); b.setAttribute('aria-selected', +b.dataset.tab === l); });
+}
+function setLevel(l) {
+  level = l; try { localStorage.setItem('kde-lab-level', l); } catch (e) {}
+  $$('[data-lv]').forEach(c => showCard(c, l));
+  $$('[data-setl]').forEach(b => b.classList.toggle('on', +b.dataset.setl === l));
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-setl]'); if (b) setLevel(+b.dataset.setl); });
+setLevel(level);
+
+/* ---------- score ---------- */
+const SCORE = { right: 0, total: 0, paint() { $('#score').innerHTML = `Quiz <b>${this.right}</b> / ${this.total}`; } };
+
+/* ---------- kernels and small helpers for this lab ---------- */
+const KER = {
+  box: { name: 'Boxcar', f: u => Math.abs(u) <= 1 ? .5 : 0, compact: true },
+  epa: { name: 'Epanechnikov', f: u => Math.abs(u) <= 1 ? .75 * (1 - u * u) : 0, compact: true },
+  tri: { name: 'Tri-cube', f: u => { const a = Math.abs(u); return a <= 1 ? 70 / 81 * (1 - a * a * a) ** 3 : 0; }, compact: true },
+  gau: { name: 'Gaussian', f: u => Math.exp(-u * u / 2) / Math.sqrt(2 * Math.PI), compact: false }
+};
+const Kh = (k, u, h) => KER[k].f(u / h) / h;
+// one draw from the unscaled kernel K
+function kerDraw(k, r) {
+  if (k === 'gau') return gauss(r);
+  if (k === 'box') return 2 * r() - 1;
+  const top = KER[k].f(0);
+  for (;;) { const u = 2 * r() - 1; if (r() * top <= KER[k].f(u)) return u; }
+}
+const grid = (a, b, n) => Array.from({ length: n }, (_, i) => a + (b - a) * i / (n - 1));
+function niceCeil(v) { const e = 10 ** Math.floor(Math.log10(v)); for (const m of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (m * e >= v - 1e-12) return m * e; return 10 * e; }
+function ticks(max, n) { const s = niceCeil(max / (n || 4)), out = []; for (let v = 0; v <= max + 1e-9; v += s) out.push(+v.toFixed(6)); return out; }
+const fmtT = v => String(+v.toFixed(3));
+const f4 = v => neg((Math.abs(v) < 5e-5 ? 0 : v).toFixed(4));
+// path that breaks wherever y is not finite
+function pathNaN(pts) { let d = '', pen = false; pts.forEach(([x, y]) => { if (!isFinite(y)) { pen = false; return; } d += (pen ? 'L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1); pen = true; }); return d; }
+// group clipped to the frame's data box
+function clip(svg, f, id) {
+  const cp = el('clipPath', { id }, el('defs', {}, svg));
+  el('rect', { x: f.L, y: f.T, width: f.R - f.L, height: f.B - f.T }, cp);
+  return el('g', { 'clip-path': `url(#${id})` }, svg);
+}
+const sinc = x => Math.abs(x) < 1e-9 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x);
+const npdf = (x, m, s) => Math.exp(-.5 * ((x - m) / s) ** 2) / (s * Math.sqrt(2 * Math.PI));
+const median = a => { const s = [...a].sort((p, q) => p - q), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+function dotSize(w, wmax) { return w > 0 ? 2.5 + 8 * Math.sqrt(w / wmax) : 2.3; }
+
+/* =====================================================================
+   16.3.1  Kernel gallery (Figure 16.8, Table 16.1, Eqs. 16.25–16.28)
+   ===================================================================== */
+(function () {
+  const svg = $('#ker-svg');
+  const st = { k: 'box', h: 1, c: 0, all: false };
+  const COL = { box: '--c3', epa: '--c2', tri: '--c0', gau: '--c1' };
+  const xs = grid(-3, 3, 1201);
+  function render() {
+    svg.innerHTML = '';
+    const ks = st.all ? Object.keys(KER) : [st.k];
+    const ymax = niceCeil(Math.max(...ks.map(k => KER[k].f(0) / st.h)) * 1.12);
+    const f = frame({ W: 460, H: 320, l: 44, r: 10, t: 12, b: 36, x: [-3, 3], y: [0, ymax] });
+    axes(svg, f, { xt: [-3, -2, -1, 0, 1, 2, 3], yt: ticks(ymax), fy: fmtT, xl: 'x' });
+    const g = clip(svg, f, 'ker-clip');
+    const cur = xs.map(x => [f.X(x), f.Y(Kh(st.k, x - st.c, st.h))]);
+    el('path', { d: pathOf(cur) + `L${f.R},${f.B}L${f.L},${f.B}Z`, fill: 'var(--mi-soft)' }, g);
+    if (st.all) Object.keys(KER).forEach(k => { if (k !== st.k) el('path', { d: pathOf(xs.map(x => [f.X(x), f.Y(Kh(k, x - st.c, st.h))])), fill: 'none', stroke: `var(${COL[k]})`, 'stroke-width': 1.8 }, g); });
+    el('path', { d: pathOf(cur), fill: 'none', stroke: 'var(--mi)', 'stroke-width': 3 }, g);
+    el('line', { x1: f.X(st.c), x2: f.X(st.c), y1: f.B, y2: f.T, stroke: 'var(--ink)', 'stroke-dasharray': '4 4', opacity: .7 }, svg);
+    const right = st.c < 1;
+    txt(svg, f.X(st.c) + (right ? 6 : -6), f.T + 12, 'mean = xₙ = ' + f2(st.c), 'lbl', { fill: 'var(--ink)', 'text-anchor': right ? 'start' : 'end' });
+    if (st.all) Object.keys(KER).forEach((k, i) => txt(svg, f.R - 4, f.T + 30 + 16 * i, KER[k].name, 'lbl', { fill: k === st.k ? 'var(--mi)' : `var(${COL[k]})`, 'text-anchor': 'end' }));
+    // numerical checks of Eq. 16.28 (area) and Eq. 16.25 (mean)
+    const L = KER[st.k].compact ? st.h : 9 * st.h, M = 6000, dx = 2 * L / M;
+    let area = 0, mean = 0;
+    for (let i = 0; i < M; i++) { const x = st.c - L + (i + .5) * dx, v = Kh(st.k, x - st.c, st.h) * dx; area += v; mean += x * v; }
+    $('#ker-area').textContent = area.toFixed(3);
+    $('#ker-mean').textContent = f3(mean);
+    $('#ker-peak').textContent = (KER[st.k].f(0) / st.h).toFixed(3);
+    $('#ker-sup').textContent = KER[st.k].compact ? `[${f2(st.c - st.h)}, ${f2(st.c + st.h)}]` : 'all of ℝ';
+    $$('#ker-table tbody tr').forEach(r => r.classList.toggle('on', r.dataset.k === st.k));
+  }
+  segm('ker-k', b => { st.k = b.dataset.k; render(); });
+  slider('ker-h', v => v.toFixed(2), v => { st.h = v; render(); });
+  slider('ker-c', v => f2(v), v => { st.c = v; render(); });
+  $('#ker-all').addEventListener('change', e => { st.all = e.target.checked; render(); });
+  render(); renderers.push(render);
+})();
+
+/* ---------- 16.3.1  2-D RBF kernel (Eqs. 16.29–16.30) ---------- */
+(function () {
+  const svg = $('#rbf-svg');
+  const st = { k: 'gau', h: 1 };
+  const f = frame({ W: 360, H: 360, l: 10, r: 10, t: 10, b: 10, x: [-3, 3], y: [-3, 3] });
+  // radial normalizer: c with c · 2π ∫ K(r) r dr = 1
+  const norm = {};
+  Object.keys(KER).forEach(k => { const R = KER[k].compact ? 1 : 10, M = 4000; let s = 0; for (let i = 0; i < M; i++) { const r = (i + .5) * R / M; s += KER[k].f(r) * r * R / M; } norm[k] = 1 / (2 * Math.PI * s); });
+  const K2 = (x, y) => norm[st.k] * KER[st.k].f(Math.hypot(x, y) / st.h) / (st.h * st.h);
+  function render() {
+    svg.innerHTML = '';
+    const peak = K2(0, 0), m = hexRgb(cssv('--mi'));
+    raster(svg, f, 150, 150, (u, v) => { const val = K2(-3 + 6 * u, -3 + 6 * v); return val > 0 ? [m[0], m[1], m[2], .92 * val / peak] : null; });
+    el('rect', { x: f.L, y: f.T, width: f.R - f.L, height: f.B - f.T, fill: 'none', stroke: 'var(--rule)' }, svg);
+    el('line', { x1: f.X(-3), x2: f.X(3), y1: f.Y(0), y2: f.Y(0), class: 'gridl' }, svg);
+    el('line', { x1: f.X(0), x2: f.X(0), y1: f.Y(-3), y2: f.Y(3), class: 'gridl' }, svg);
+    const sc = f.X(1) - f.X(0);
+    (KER[st.k].compact ? [1] : [1, 2]).forEach(k => {
+      el('circle', { cx: f.X(0), cy: f.Y(0), r: k * st.h * sc, fill: 'none', stroke: 'var(--ink)', 'stroke-dasharray': '5 4', 'stroke-width': 1.3 }, svg);
+      txt(svg, f.X(0) + k * st.h * sc * .707 + 4, f.Y(0) - k * st.h * sc * .707 - 4, (KER[st.k].compact ? '‖x‖ = h' : `‖x‖ = ${k}h`), 'lbl', { fill: 'var(--ink)' });
+    });
+    txt(svg, f.R - 6, f.B - 8, 'x₁', 'axl', { 'text-anchor': 'end' }); txt(svg, f.X(0) + 6, f.T + 14, 'x₂', 'axl');
+    // integrate numerically over a large square
+    const R = KER[st.k].compact ? st.h : 8 * st.h, G = 260, d = 2 * R / G; let tot = 0;
+    for (let i = 0; i < G; i++) for (let j = 0; j < G; j++) tot += K2(-R + (i + .5) * d, -R + (j + .5) * d) * d * d;
+    const c = norm[st.k];
+    $('#rbf-chain').innerHTML = (st.k === 'gau'
+      ? `K_h(x) = 1/(2πh²) · exp(−‖x‖²/2h²)<br><span class="mu">= [1/(h√2π) e^(−x₁²/2h²)] × [1/(h√2π) e^(−x₂²/2h²)]</span><br>`
+      : `K_h(x) = c/h² · K(‖x‖/h), <span class="mu">with c = ${c.toFixed(4)} so the 2-D volume is 1</span><br>`) +
+      `peak K_h(0) = <span class="m">${peak.toFixed(4)}</span><br>∫∫ K_h(x) dx = <span class="ok">${tot.toFixed(3)}</span>`;
+  }
+  segm('rbf-k', b => { st.k = b.dataset.k; render(); });
+  slider('rbf-h', v => v.toFixed(2), v => { st.h = v; render(); });
+  render(); renderers.push(render);
+})();
+
+/* =====================================================================
+   16.3.2  Parzen window estimator (Eq. 16.33, Figure 16.9) + sampling
+   ===================================================================== */
+(function () {
+  const svg = $('#pz-svg'), ssv = $('#sm-svg');
+  const FIG = [-2.1, -1.3, -0.4, 1.9, 5.1, 6.2];
+  const XR = [-7, 12];
+  const st = { d: FIG.slice(), k: 'box', h: 1, q: -1.2, mode: 'q', bumps: true };
+  const fo = { W: 640, H: 330, l: 48, r: 12, t: 14, b: 40, x: XR };
+  let f = frame(Object.assign({ y: [0, 1] }, fo));
+  const xs = grid(XR[0], XR[1], 1141);
+  const kde = x => { let s = 0; for (const xn of st.d) s += Kh(st.k, x - xn, st.h); return s / st.d.length; };
+  const smp = { list: [], key: '', r: rng(77), last: null };
+  let dragI = -1;
+
+  function render() {
+    svg.innerHTML = '';
+    const N = st.d.length, ps = N ? xs.map(kde) : xs.map(() => 0);
+    const bumpPeak = N ? KER[st.k].f(0) / st.h / N : 0;
+    const ymax = niceCeil(Math.max(.05, ...ps, st.bumps ? bumpPeak : 0) * 1.15);
+    f = frame(Object.assign({ y: [0, ymax] }, fo));
+    axes(svg, f, { xt: [-6, -4, -2, 0, 2, 4, 6, 8, 10, 12], yt: ticks(ymax), fy: fmtT, xl: 'x' });
+    const g = clip(svg, f, 'pz-clip');
+    if (N) {
+      const line = pathOf(xs.map((x, i) => [f.X(x), f.Y(ps[i])]));
+      el('path', { d: line + `L${f.R},${f.B}L${f.L},${f.B}Z`, fill: 'var(--mi-soft)' }, g);
+      if (st.bumps) st.d.forEach(xn => el('path', { d: pathOf(xs.map(x => [f.X(x), f.Y(Kh(st.k, x - xn, st.h) / N)])), fill: 'none', stroke: 'var(--c1)', 'stroke-width': 1.3, opacity: .85 }, g));
+      el('path', { d: line, fill: 'none', stroke: 'var(--mi)', 'stroke-width': 2.8 }, g);
+    } else txt(svg, (f.L + f.R) / 2, (f.T + f.B) / 2, 'No data yet: choose "add / drag points" and click.', 'axl', { 'text-anchor': 'middle' });
+    const pq = N ? kde(st.q) : NaN, qx = f.X(st.q), lft = st.q > 8;
+    el('line', { x1: qx, x2: qx, y1: f.B, y2: f.T, stroke: 'var(--ink)', 'stroke-dasharray': '4 4', opacity: .7 }, svg);
+    if (N) el('circle', { cx: qx, cy: f.Y(pq), r: 5, fill: 'var(--mi)', stroke: 'var(--surface)', 'stroke-width': 2 }, svg);
+    txt(svg, qx + (lft ? -6 : 6), f.T + 12, 'x* = ' + f2(st.q), 'lbl', { fill: 'var(--ink)', 'text-anchor': lft ? 'end' : 'start' });
+    st.d.forEach(xn => cross(svg, f.X(xn), f.B, 5));
+
+    $('#pz-n').textContent = N;
+    $('#pz-p').textContent = N ? pq.toFixed(4) : '–';
+    if (N) {
+      const lo = Math.min(...st.d) - (KER[st.k].compact ? 1 : 9) * st.h, hi = Math.max(...st.d) + (KER[st.k].compact ? 1 : 9) * st.h, M = 8000, dx = (hi - lo) / M;
+      let a = 0; for (let i = 0; i < M; i++) a += kde(lo + (i + .5) * dx) * dx;
+      $('#pz-area').textContent = a.toFixed(3);
+      const terms = st.d.map(xn => Kh(st.k, st.q - xn, st.h)), S = terms.reduce((s, v) => s + v, 0);
+      let html = `p(x*) = (1/N) Σₙ K_h(x* − xₙ)<br>= (1/${N}) · [${terms.slice(0, 8).map(v => v > 0 ? f3(v) : '<span class="mu">0</span>').join(' + ')}${N > 8 ? ` + … (${N - 8} more)` : ''}]<br>= (1/${N}) · ${f3(S)} = <span class="m">${pq.toFixed(4)}</span>`;
+      if (st.k === 'box') { const m = terms.filter(v => v > 0).length; html += `<br><span class="mu">boxcar = counting: ${m} point${m === 1 ? '' : 's'} within h of x*, so ${m} / (${N} · 2 · ${f2(st.h)}) = ${(m / (N * 2 * st.h)).toFixed(4)}</span>`; }
+      $('#pz-chain').innerHTML = html;
+    } else { $('#pz-area').textContent = '–'; $('#pz-chain').innerHTML = 'With no data, the estimate is undefined.'; }
+    renderSamples(ps);
+  }
+
+  function renderSamples(ps) {
+    const key = st.d.join(',') + '|' + st.k + '|' + st.h;
+    if (key !== smp.key) { smp.key = key; smp.list = []; smp.last = null; }
+    ssv.innerHTML = '';
+    const BW = .5, nb = Math.round((XR[1] - XR[0]) / BW), cnt = new Array(nb).fill(0), S = smp.list.length;
+    smp.list.forEach(x => { const b = Math.floor((x - XR[0]) / BW); if (b >= 0 && b < nb) cnt[b]++; });
+    const dens = cnt.map(c => S ? c / (S * BW) : 0);
+    const ymax = niceCeil(Math.max(.05, ...ps, ...dens) * 1.15);
+    const g2 = frame({ W: 640, H: 260, l: 48, r: 12, t: 14, b: 36, x: XR, y: [0, ymax] });
+    axes(ssv, g2, { xt: [-6, -4, -2, 0, 2, 4, 6, 8, 10, 12], yt: ticks(ymax, 3), fy: fmtT, xl: 'x' });
+    dens.forEach((d, b) => { if (d > 0) el('rect', { x: g2.X(XR[0] + b * BW) + .5, y: g2.Y(d), width: g2.X(BW) - g2.X(0) - 1, height: g2.B - g2.Y(d), fill: 'var(--c1-soft)', stroke: 'var(--c1)', 'stroke-width': 1 }, ssv); });
+    if (st.d.length) el('path', { d: pathOf(xs.map((x, i) => [g2.X(x), g2.Y(ps[i])])), fill: 'none', stroke: 'var(--mi)', 'stroke-width': 2.4 }, ssv);
+    st.d.forEach(xn => cross(ssv, g2.X(xn), g2.B, 4.5));
+    const L = smp.last;
+    if (L) {
+      const y = g2.T + 26, x0 = g2.X(st.d[L.i]), x1 = g2.X(L.x);
+      el('circle', { cx: x0, cy: g2.B, r: 10, fill: 'none', stroke: 'var(--c3)', 'stroke-width': 2.5 }, ssv);
+      el('line', { x1: x0, x2: x0, y1: g2.B - 10, y2: y, stroke: 'var(--c3)', 'stroke-dasharray': '3 3' }, ssv);
+      if (Math.abs(x1 - x0) > 8) arrow(ssv, x0, y, x1, y, 'var(--c3)', 2); else el('line', { x1: x0, x2: x1, y1: y, y2: y, stroke: 'var(--c3)', 'stroke-width': 2 }, ssv);
+      el('circle', { cx: x1, cy: y, r: 5.5, fill: 'var(--c3)', stroke: 'var(--surface)', 'stroke-width': 1.5 }, ssv);
+      txt(ssv, x1, y - 10, 'new sample', 'lbl', { fill: 'var(--c3)', 'text-anchor': 'middle' });
+      $('#sm-chain').innerHTML = `1. pick n uniformly from 1…${st.d.length}: <span class="a">n = ${L.i + 1}, xₙ = ${f2(st.d[L.i])}</span><br>2. draw ε from the ${KER[st.k].name.toLowerCase()} kernel K: <span class="a">ε = ${f3(L.e)}</span><br>3. x = xₙ + h·ε = ${f2(st.d[L.i])} + ${f2(st.h)} · ${f3(L.e)} = <span class="m">${f3(L.x)}</span>`;
+    } else $('#sm-chain').innerHTML = st.d.length ? 'Press "Draw 1" to see one sample worked out.' : 'Add some data points first.';
+    $('#sm-n').textContent = S ? `${S.toLocaleString()} sample${S === 1 ? '' : 's'}` : '';
+  }
+  function draw(n) {
+    if (!st.d.length) return;
+    for (let t = 0; t < n; t++) { const i = Math.floor(smp.r() * st.d.length), e = kerDraw(st.k, smp.r); smp.last = { i, e, x: st.d[i] + st.h * e }; smp.list.push(smp.last.x); }
+    if (n > 1) smp.last = null;
+    render();
+  }
+
+  const nearest = px => { let bi = -1, bd = 10; st.d.forEach((x, i) => { const d = Math.abs(f.X(x) - px); if (d < bd) { bd = d; bi = i; } }); return bi; };
+  const toX = p => clamp(f.iX(p.x), XR[0] + .2, XR[1] - .2);
+  onDrag(svg, p => {
+    if (st.mode === 'q') { st.q = toX(p); render(); return; }
+    const i = nearest(p.x);
+    if (st.mode === 'x') { if (i >= 0) { st.d.splice(i, 1); render(); } return false; }
+    if (i >= 0) dragI = i; else { st.d.push(toX(p)); dragI = st.d.length - 1; render(); }
+  }, p => {
+    if (st.mode === 'q') st.q = toX(p); else if (dragI >= 0) st.d[dragI] = toX(p); else return;
+    render();
+  }, () => { dragI = -1; });
+
+  segm('pz-mode', b => { st.mode = b.dataset.m; });
+  const kseg = $('#pz-k');
+  segm('pz-k', b => { st.k = b.dataset.k; render(); });
+  const hS = slider('pz-h', v => v.toFixed(2), v => { st.h = v; render(); });
+  $('#pz-bumps').addEventListener('change', e => { st.bumps = e.target.checked; render(); });
+  $$('[data-pz]').forEach(b => b.addEventListener('click', () => {
+    const [k, h] = b.dataset.pz.split(','); st.d = FIG.slice(); st.k = k; st.h = +h; hS.set(+h);
+    $$('button', kseg).forEach(x => x.classList.toggle('on', x.dataset.k === k)); render();
+  }));
+  $('#pz-reset').addEventListener('click', () => { st.d = FIG.slice(); render(); });
+  $('#pz-more').addEventListener('click', () => { const r = rng(st.d.length * 13 + 5); for (let i = 0; i < 20; i++) st.d.push(clamp(r() < .5 ? -1 + 1.3 * gauss(r) : 5.6 + .9 * gauss(r), XR[0] + .2, XR[1] - .2)); render(); });
+  $('#pz-clear').addEventListener('click', () => { st.d = []; render(); });
+  $('#sm-1').addEventListener('click', () => draw(1));
+  $('#sm-100').addEventListener('click', () => draw(100));
+  $('#sm-1000').addEventListener('click', () => draw(1000));
+  $('#sm-clear').addEventListener('click', () => { smp.list = []; smp.last = null; render(); });
+  render(); renderers.push(render);
+})();
+
+/* =====================================================================
+   16.3.3  Choosing the bandwidth: rule of thumb, MAD, ISE and LOO curves
+   ===================================================================== */
+(function () {
+  const NS = [10, 20, 50, 100, 200, 500, 1000];
+  const t2 = x => 1 / (2 * Math.SQRT2) * (1 + x * x / 2) ** -1.5;
+  const DISTS = {
+    gauss: { pdf: x => npdf(x, 0, 1), draw: r => gauss(r), range: [-4, 4] },
+    bimodal: { pdf: x => .5 * npdf(x, -1.6, .5) + .5 * npdf(x, 1.6, .5), draw: r => (r() < .5 ? -1.6 : 1.6) + .5 * gauss(r), range: [-4, 4] },
+    skew: { pdf: x => .65 * npdf(x, -.8, .45) + .35 * npdf(x, 1, 1.1), draw: r => r() < .65 ? -.8 + .45 * gauss(r) : 1 + 1.1 * gauss(r), range: [-3.5, 4.5] },
+    heavy: { pdf: t2, draw: r => { let u = 0; while (!u) u = r(); return gauss(r) / Math.sqrt(-Math.log(u)); }, range: [-6, 6] }
+  };
+  const LH = [-3, 1.1], HS = grid(LH[0], LH[1], 44).map(Math.exp);
+  const st = { d: 'gauss', ni: 3, lh: -.8, seed: 1, m: 'ise' };
+  let D = null;
+  const fitSvg = $('#bw-fit'), curSvg = $('#bw-curve');
+
+  function data() {
+    const key = st.d + '|' + st.ni + '|' + st.seed;
+    if (D && D.key === key) return D;
+    const T = DISTS[st.d], N = NS[st.ni], r = rng(5000 + 31 * st.seed + 7 * Object.keys(DISTS).indexOf(st.d) + 1000 * st.ni);
+    const x = Array.from({ length: N }, () => T.draw(r));
+    const mean = x.reduce((s, v) => s + v, 0) / N, sd = Math.sqrt(x.reduce((s, v) => s + (v - mean) ** 2, 0) / (N - 1));
+    const med = median(x), mad = 1.4826 * median(x.map(v => Math.abs(v - med)));
+    const rule = s => s * (4 / (3 * N)) ** .2;
+    D = { key, x, N, sd, mad, hsd: rule(sd), hmad: rule(mad), ise: null, loo: null };
+    return D;
+  }
+  const kdeG = (x, xs, h) => { let s = 0; const a = -1 / (2 * h * h); for (const v of xs) s += Math.exp(a * (x - v) ** 2); return s / (xs.length * h * Math.sqrt(2 * Math.PI)); };
+  function iseCurve(D) {
+    if (D.ise) return D.ise;
+    const T = DISTS[st.d], G = 240, gx = grid(T.range[0], T.range[1], G), dx = gx[1] - gx[0], tp = gx.map(T.pdf);
+    D.ise = HS.map(h => gx.reduce((s, x, i) => s + (kdeG(x, D.x, h) - tp[i]) ** 2 * dx, 0));
+    return D.ise;
+  }
+  function looCurve(D) {
+    if (D.loo) return D.loo;
+    const N = D.N, x = D.x, d2 = new Float64Array(N * N), mn = new Float64Array(N).fill(Infinity);
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (i !== j) { const v = (x[i] - x[j]) ** 2; d2[i * N + j] = v; if (v < mn[i]) mn[i] = v; }
+    D.loo = HS.map(h => {
+      const a = -1 / (2 * h * h), c = -Math.log(N - 1) - Math.log(h) - .5 * Math.log(2 * Math.PI);
+      let tot = 0;
+      for (let i = 0; i < N; i++) { const m = a * mn[i]; let s = 0; for (let j = 0; j < N; j++) if (j !== i) s += Math.exp(a * d2[i * N + j] - m); tot += m + Math.log(s) + c; }
+      return tot / N;
+    });
+    return D.loo;
+  }
+  function bestIdx(D) { const c = st.m === 'ise' ? iseCurve(D) : looCurve(D); let b = 0; c.forEach((v, i) => { if (st.m === 'ise' ? v < c[b] : v > c[b]) b = i; }); return b; }
+
+  function render() {
+    const D = data(), T = DISTS[st.d], h = Math.exp(st.lh);
+    // left: truth vs KDE
+    fitSvg.innerHTML = '';
+    const gx = grid(T.range[0], T.range[1], 400), tp = gx.map(T.pdf), kp = gx.map(x => kdeG(x, D.x, h));
+    const ymax = niceCeil(Math.max(...tp) * 1.6);
+    const f = frame({ W: 400, H: 300, l: 42, r: 10, t: 10, b: 36, x: T.range, y: [0, ymax] });
+    const xt = []; for (let v = Math.ceil(T.range[0]); v <= T.range[1]; v += (T.range[1] - T.range[0] > 9 ? 2 : 1)) xt.push(v);
+    axes(fitSvg, f, { xt, yt: ticks(ymax, 3), fy: fmtT, xl: 'x' });
+    const g = clip(fitSvg, f, 'bw-clip');
+    el('path', { d: pathOf(gx.map((x, i) => [f.X(x), f.Y(kp[i])])) + `L${f.R},${f.B}L${f.L},${f.B}Z`, fill: 'var(--mi-soft)' }, g);
+    el('path', { d: pathOf(gx.map((x, i) => [f.X(x), f.Y(tp[i])])), fill: 'none', stroke: 'var(--ink)', 'stroke-width': 2, 'stroke-dasharray': '6 5' }, g);
+    el('path', { d: pathOf(gx.map((x, i) => [f.X(x), f.Y(kp[i])])), fill: 'none', stroke: 'var(--mi)', 'stroke-width': 2.4 }, g);
+    let off = 0;
+    D.x.forEach(v => { if (v < T.range[0] || v > T.range[1]) { off++; return; } el('line', { x1: f.X(v), x2: f.X(v), y1: f.B, y2: f.B - 9, stroke: 'var(--ink)', 'stroke-width': 1, opacity: .55 }, fitSvg); });
+    if (off) txt(fitSvg, f.R - 4, f.T + 14, `${off} point${off === 1 ? '' : 's'} off the chart`, 'ax', { 'text-anchor': 'end' });
+    txt(fitSvg, f.L + 6, f.T + 14, 'h = ' + h.toFixed(3), 'lbl', { fill: 'var(--mi)' });
+
+    // right: error curve vs log h
+    curSvg.innerHTML = '';
+    const c = st.m === 'ise' ? iseCurve(D) : looCurve(D), b = bestIdx(D);
+    let y0, y1;
+    if (st.m === 'ise') { y0 = 0; y1 = niceCeil(Math.min(Math.max(...c), c[b] * 8)); }
+    else { const best = c[b], spread = Math.max(.6, 2.2 * (best - c[c.length - 1])); y0 = best - spread; y1 = best + .1 * spread; }
+    const fc = frame({ W: 400, H: 270, l: 52, r: 10, t: 14, b: 38, x: LH, y: [y0, y1] });
+    const yt = []; { const s = niceCeil((y1 - y0) / 4); for (let v = Math.ceil(y0 / s) * s; v <= y1 + 1e-9; v += s) yt.push(+v.toFixed(6)); }
+    axes(curSvg, fc, { xt: [.05, .1, .2, .5, 1, 2].map(Math.log), fx: v => String(+Math.exp(v).toFixed(2)), yt, fy: v => st.m === 'ise' ? String(+v.toFixed(4)) : f2(v), xl: 'bandwidth h (log scale)' });
+    const gc = clip(curSvg, fc, 'bw-cclip');
+    el('path', { d: pathNaN(HS.map((hh, i) => [fc.X(Math.log(hh)), fc.Y(c[i])])), fill: 'none', stroke: 'var(--ink)', 'stroke-width': 2.2 }, gc);
+    const vline = (hh, col, dash, lab, dy) => { const X = fc.X(clamp(Math.log(hh), LH[0], LH[1])); const ln = el('line', { x1: X, x2: X, y1: fc.T, y2: fc.B, stroke: col, 'stroke-width': 2 }, curSvg); if (dash) ln.setAttribute('stroke-dasharray', dash); if (lab) txt(curSvg, X + 4, fc.T + dy, lab, 'lbl', { fill: col }); };
+    vline(D.hsd, 'var(--c3)', '5 4', 'rule (std)', 12);
+    vline(D.hmad, 'var(--c1)', '5 4', 'rule (MAD)', 26);
+    vline(h, 'var(--mi)', null, 'your h', 40);
+    el('circle', { cx: fc.X(Math.log(HS[b])), cy: fc.Y(c[b]), r: 6, fill: 'var(--green)', stroke: 'var(--surface)', 'stroke-width': 2 }, curSvg);
+    txt(curSvg, fc.X(Math.log(HS[b])), fc.Y(c[b]) + (st.m === 'ise' ? -10 : 18), 'best', 'lbl', { fill: 'var(--green)', 'text-anchor': 'middle' });
+    txt(curSvg, fc.L - 40, (fc.T + fc.B) / 2, st.m === 'ise' ? 'ISE (lower is better)' : 'mean LOO log-lik (higher is better)', 'axl', { 'text-anchor': 'middle', transform: `rotate(-90 ${fc.L - 40} ${(fc.T + fc.B) / 2})` });
+
+    $('#bw-std').textContent = D.sd.toFixed(3);
+    $('#bw-madv').textContent = D.mad.toFixed(3);
+    $('#bw-hsd').textContent = D.hsd.toFixed(3);
+    $('#bw-hmad').textContent = D.hmad.toFixed(3);
+    $('#bw-hbest').textContent = HS[b].toFixed(3);
+  }
+  const hS = slider('bw-h', v => Math.exp(v).toFixed(2), v => { st.lh = v; render(); });
+  slider('bw-n', v => NS[v], v => { st.ni = v; render(); });
+  const setH = hh => { st.lh = clamp(Math.log(hh), LH[0], LH[1]); hS.set(st.lh); render(); };
+  segm('bw-d', b => { st.d = b.dataset.d; render(); });
+  segm('bw-m', b => { st.m = b.dataset.m; render(); });
+  $('#bw-sd').addEventListener('click', () => setH(data().hsd));
+  $('#bw-mad').addEventListener('click', () => setH(data().hmad));
+  $('#bw-best').addEventListener('click', () => { const D = data(); setH(HS[bestIdx(D)]); });
+  $('#bw-new').addEventListener('click', () => { st.seed++; render(); });
+  render(); renderers.push(render);
+})();
+
+/* =====================================================================
+   16.3.4  Balloon KDE → KNN (Eqs. 16.34–16.35)
+   ===================================================================== */
+(function () {
+  const svg = $('#bk-svg');
+  const SIZES = [45, 25, 15], MU = [[.3, .62], [.66, .72], [.76, .3]], SD = [.13, .1, .08];
+  const P = [];
+  { const r = rng(41); SIZES.forEach((n, c) => { for (let i = 0; i < n; i++) P.push({ x: clamp(MU[c][0] + SD[c] * gauss(r), .02, .98), y: clamp(MU[c][1] + SD[c] * gauss(r), .02, .98), c }); }); }
+  const N = P.length;
+  const st = { q: { x: .5, y: .5 }, K: 10, mode: 'balloon', r: .12, reg: false };
+  const f = frame({ W: 420, H: 420, l: 10, r: 10, t: 10, b: 10, x: [0, 1], y: [0, 1] });
+  const sc = f.X(1) - f.X(0);
+  function windowAt(q) {
+    const d = P.map(p => Math.hypot(p.x - q.x, p.y - q.y));
+    const r = st.mode === 'balloon' ? [...d].sort((a, b) => a - b)[st.K - 1] : st.r;
+    const inside = []; d.forEach((v, i) => { if (v <= r + 1e-12) inside.push(i); });
+    const cnt = [0, 0, 0]; inside.forEach(i => cnt[P[i].c]++);
+    return { r, inside, cnt };
+  }
+  function render() {
+    svg.innerHTML = '';
+    if (st.reg) {
+      const cols = [0, 1, 2].map(crgb);
+      raster(svg, f, 70, 70, (u, v) => { const w = windowAt({ x: u, y: v }), tot = w.cnt[0] + w.cnt[1] + w.cnt[2]; if (!tot) return null; const lab = w.cnt.indexOf(Math.max(...w.cnt)), c = cols[lab]; return [c[0], c[1], c[2], .1 + .35 * (w.cnt[lab] / tot - 1 / 3) * 1.5]; });
+    }
+    el('rect', { x: f.L, y: f.T, width: f.R - f.L, height: f.B - f.T, fill: 'none', stroke: 'var(--rule)' }, svg);
+    const w = windowAt(st.q), qx = f.X(st.q.x), qy = f.Y(st.q.y);
+    el('circle', { cx: qx, cy: qy, r: w.r * sc, fill: 'var(--mi-soft)', stroke: 'var(--mi)', 'stroke-width': 1.6, 'stroke-dasharray': '5 4' }, svg);
+    w.inside.forEach(i => el('line', { x1: qx, y1: qy, x2: f.X(P[i].x), y2: f.Y(P[i].y), stroke: 'var(--ink)', 'stroke-width': 1, opacity: .45 }, svg));
+    const inS = new Set(w.inside);
+    P.forEach((p, i) => el('circle', { cx: f.X(p.x), cy: f.Y(p.y), r: inS.has(i) ? 6.5 : 5, fill: cvar(p.c), stroke: inS.has(i) ? 'var(--ink)' : 'var(--surface)', 'stroke-width': inS.has(i) ? 2 : 1 }, svg));
+    cross(svg, qx, qy);
+
+    const V = Math.PI * w.r * w.r, tot = w.cnt[0] + w.cnt[1] + w.cnt[2];
+    const rows = [0, 1, 2].map(c => { const pxc = w.cnt[c] / (SIZES[c] * V), pr = SIZES[c] / N; return { c, pxc, pr, prod: pxc * pr }; });
+    const Z = rows.reduce((s, r) => s + r.prod, 0);
+    $('#bk-rad').textContent = w.r.toFixed(3);
+    $('#bk-vol').textContent = V.toFixed(4);
+    $('#bk-in').textContent = tot;
+    $('#bk-table').innerHTML = '<thead><tr><th>class</th><th>N_c(x)</th><th>N_c</th><th>p(x|c)</th><th>p(c)</th><th>p(x|c)·p(c)</th><th>p(c|x)</th></tr></thead><tbody>' +
+      rows.map(r => `<tr><td><span class="dot" style="background:${cvar(r.c)}"></span>class ${r.c}</td><td>${w.cnt[r.c]}</td><td>${SIZES[r.c]}</td><td>${r.pxc.toFixed(3)}</td><td>${r.pr.toFixed(3)}</td><td>${r.prod.toFixed(3)}</td><td><b>${Z > 0 ? (r.prod / Z).toFixed(3) : '0/0'}</b></td></tr>`).join('') +
+      `<tr class="tot"><td>total</td><td>${tot}</td><td>${N}</td><td></td><td>1.000</td><td>${Z.toFixed(3)}</td><td>${Z > 0 ? '1.000' : '–'}</td></tr></tbody>`;
+    const lab = st.mode === 'balloon' ? 'K' : 'Σ N_c(x)', den = st.mode === 'balloon' ? st.K : tot;
+    $('#bk-chain').innerHTML = tot === 0
+      ? '<span class="bad">No points inside the window.</span> Every product is 0, so the posterior is 0/0. A fixed window can come up empty; a balloon never does.'
+      : `each product = N_c(x)/(N_c V) · N_c/N = N_c(x)/(N·V), <span class="mu">with N·V = ${N} · ${V.toFixed(4)} = ${(N * V).toFixed(3)}</span><br>` +
+        `the 1/(N·V) cancels, leaving p(c | x) = N_c(x) / ${lab}:<br>` +
+        [0, 1, 2].map(c => `<span style="color:${cvar(c)};font-weight:600">class ${c}</span>: ${w.cnt[c]} / ${den} = ${(w.cnt[c] / den).toFixed(3)}`).join(' · ') +
+        (st.mode === 'balloon' && tot !== st.K ? `<br><span class="mu">(${tot} points sit on or inside the circle because of a distance tie)</span>` : '');
+  }
+  onDrag(svg, p => { st.q = { x: clamp(f.iX(p.x), 0, 1), y: clamp(f.iY(p.y), 0, 1) }; render(); }, p => { st.q = { x: clamp(f.iX(p.x), 0, 1), y: clamp(f.iY(p.y), 0, 1) }; render(); });
+  const kS = slider('bk-k', String, v => { st.K = v; render(); });
+  slider('bk-r', v => v.toFixed(3), v => { st.r = v; render(); });
+  segm('bk-mode', b => { st.mode = b.dataset.m; $('#bk-krow').hidden = st.mode !== 'balloon'; $('#bk-rrow').hidden = st.mode === 'balloon'; render(); });
+  $('#bk-regions').addEventListener('change', e => { st.reg = e.target.checked; render(); });
+  $$('[data-bk]').forEach(b => b.addEventListener('click', () => { const [x, y, k] = b.dataset.bk.split(',').map(Number); st.q = { x, y }; st.K = k; kS.set(k); render(); }));
+  render(); renderers.push(render);
+})();
+
+/* =====================================================================
+   16.3.5.1  Nadaraya-Watson kernel regression (Eqs. 16.36–16.40, Fig. 16.10)
+   ===================================================================== */
+(function () {
+  const svg = $('#nw-svg');
+  const st = { k: 'gau', h: .12, N: 40, s: .1, seed: 1, q: .4 };
+  const f = frame({ W: 440, H: 340, l: 40, r: 10, t: 10, b: 34, x: [-1.6, 1.6], y: [-.8, 1.5] });
+  const gx = grid(-1.6, 1.6, 321);
+  let base = null;
+  function data() {
+    const key = st.N + '|' + st.seed;
+    if (!base || base.key !== key) { const r = rng(900 + st.seed * 17 + st.N); base = { key, x: [], z: [] }; for (let i = 0; i < st.N; i++) { base.x.push(-1.5 + 3 * r()); base.z.push(gauss(r)); } }
+    return base.x.map((x, i) => ({ x, y: sinc(x) + st.s * base.z[i] }));
+  }
+  function render() {
+    svg.innerHTML = '';
+    const D = data();
+    const mu = x => { let s0 = 0, t0 = 0; for (const p of D) { const k = Kh(st.k, x - p.x, st.h); s0 += k; t0 += k * p.y; } return s0 > 0 ? t0 / s0 : NaN; };
+    axes(svg, f, { xt: [-1.5, -1, -.5, 0, .5, 1, 1.5], yt: [-.5, 0, .5, 1, 1.5], fy: v => neg(v), xl: 'x' });
+    const g = clip(svg, f, 'nw-clip');
+    const ks = D.map(p => Kh(st.k, st.q - p.x, st.h)), S0 = ks.reduce((s, v) => s + v, 0);
+    const w = ks.map(k => S0 > 0 ? k / S0 : 0), wmax = Math.max(...w);
+    // kernel at the query, drawn along the bottom
+    const peak = KER[st.k].f(0) / st.h;
+    el('path', { d: pathOf(gx.map(x => [f.X(x), f.B - 56 * Kh(st.k, st.q - x, st.h) / peak])) + `L${f.R},${f.B}L${f.L},${f.B}Z`, fill: 'var(--c1-soft)', stroke: 'var(--c1)', 'stroke-width': 1.2 }, g);
+    el('path', { d: pathOf(gx.map(x => [f.X(x), f.Y(sinc(x))])), fill: 'none', stroke: 'var(--ink)', 'stroke-width': 1.8, 'stroke-dasharray': '6 5' }, g);
+    D.forEach((p, i) => el('circle', { cx: f.X(p.x), cy: f.Y(p.y), r: dotSize(w[i], wmax), fill: w[i] > 0 ? 'var(--mi)' : 'var(--muted)', 'fill-opacity': w[i] > 0 ? .3 + .6 * w[i] / wmax : .5, stroke: w[i] > 0 ? 'var(--mi)' : 'none' }, g));
+    el('path', { d: pathNaN(gx.map(x => [f.X(x), f.Y(mu(x))])), fill: 'none', stroke: 'var(--mi)', 'stroke-width': 2.8 }, g);
+    const qx = f.X(st.q), mq = S0 > 0 ? w.reduce((s, v, i) => s + v * D[i].y, 0) : NaN;
+    el('line', { x1: qx, x2: qx, y1: f.T, y2: f.B, stroke: 'var(--ink)', 'stroke-dasharray': '4 4', opacity: .7 }, svg);
+    if (isFinite(mq)) el('circle', { cx: qx, cy: f.Y(clamp(mq, -.8, 1.5)), r: 6, fill: 'var(--mi)', stroke: 'var(--surface)', 'stroke-width': 2 }, svg);
+    txt(svg, qx + (st.q > 1 ? -6 : 6), f.T + 12, 'x* = ' + f2(st.q), 'lbl', { fill: 'var(--ink)', 'text-anchor': st.q > 1 ? 'end' : 'start' });
+
+    $('#nw-mu').textContent = isFinite(mq) ? f3(mq) : 'undefined';
+    $('#nw-f').textContent = f3(sinc(st.q));
+    $('#nw-eff').textContent = S0 > 0 ? (1 / w.reduce((s, v) => s + v * v, 0)).toFixed(1) : '–';
+    if (!(S0 > 0)) { $('#nw-table').innerHTML = '<tbody><tr><td>No training point is within reach of the kernel at x*, so the denominator Σ K_h is 0 and µ(x*) is undefined (0/0).</td></tr></tbody>'; return; }
+    const top = D.map((p, i) => ({ i, p, k: ks[i], w: w[i] })).sort((a, b) => b.w - a.w).slice(0, 6);
+    $('#nw-table').innerHTML = '<thead><tr><th>n</th><th>xₙ</th><th>yₙ</th><th>K_h(x* − xₙ)</th><th>wₙ(x*)</th><th>wₙ yₙ</th></tr></thead><tbody>' +
+      top.map(t => `<tr><td>${t.i + 1}</td><td>${f3(t.p.x)}</td><td>${f3(t.p.y)}</td><td>${f3(t.k)}</td><td>${t.w.toFixed(3)}</td><td>${f3(t.w * t.p.y)}</td></tr>`).join('') +
+      `<tr class="tot"><td>all ${D.length}</td><td></td><td></td><td>Σ = ${f3(S0)}</td><td>1.000</td><td>µ = ${f3(mq)}</td></tr></tbody>`;
+  }
+  const mv = p => { st.q = clamp(f.iX(p.x), -1.55, 1.55); render(); };
+  onDrag(svg, mv, mv);
+  segm('nw-k', b => { st.k = b.dataset.k; render(); });
+  slider('nw-h', v => v.toFixed(2), v => { st.h = v; render(); });
+  slider('nw-n', String, v => { st.N = v; render(); });
+  slider('nw-s', v => v.toFixed(2), v => { st.s = v; render(); });
+  $('#nw-new').addEventListener('click', () => { st.seed++; render(); });
+  render(); renderers.push(render);
+})();
+
+/* =====================================================================
+   16.3.5.2  Predictive variance (Eqs. 16.41–16.45)
+   ===================================================================== */
+(function () {
+  const svg = $('#vr-svg');
+  const st = { d: 'grow', h: .15, sg: .05, seed: 1, q: .9 };
+  const NOISE = { const: () => .12, grow: x => .02 + .14 * (x + 1.5) / 1.5 };
+  const N = 120;
+  const f = frame({ W: 440, H: 340, l: 40, r: 10, t: 10, b: 34, x: [-1.6, 1.6], y: [-1, 1.8] });
+  const gx = grid(-1.55, 1.55, 241);
+  function data() { const r = rng(1300 + 11 * st.seed); return Array.from({ length: N }, () => { const x = -1.5 + 3 * r(); return { x, y: sinc(x) + NOISE[st.d](x) * gauss(r) }; }); }
+  function stats(D, x) {
+    let s0 = 0, t1 = 0, t2 = 0;
+    for (const p of D) { const k = Kh('gau', x - p.x, st.h); s0 += k; t1 += k * p.y; t2 += k * p.y * p.y; }
+    const mu = t1 / s0, m2 = t2 / s0;
+    return { mu, m2, V: st.sg * st.sg + Math.max(0, m2 - mu * mu) };
+  }
+  function render() {
+    svg.innerHTML = '';
+    const D = data();
+    axes(svg, f, { xt: [-1.5, -1, -.5, 0, .5, 1, 1.5], yt: [-1, -.5, 0, .5, 1, 1.5], fy: v => neg(v), xl: 'x' });
+    const g = clip(svg, f, 'vr-clip');
+    const S = gx.map(x => stats(D, x));
+    const up = gx.map((x, i) => [f.X(x), f.Y(S[i].mu + 2 * Math.sqrt(S[i].V))]), dn = gx.map((x, i) => [f.X(x), f.Y(S[i].mu - 2 * Math.sqrt(S[i].V))]);
+    el('path', { d: pathOf(up) + 'L' + pathOf(dn.reverse()).slice(1) + 'Z', fill: 'var(--mi-soft)', stroke: 'none' }, g);
+    [1, -1].forEach(s => el('path', { d: pathOf(gx.map(x => [f.X(x), f.Y(sinc(x) + 2 * s * NOISE[st.d](x))])), fill: 'none', stroke: 'var(--muted)', 'stroke-width': 1.3, 'stroke-dasharray': '4 4' }, g));
+    el('path', { d: pathOf(gx.map(x => [f.X(x), f.Y(sinc(x))])), fill: 'none', stroke: 'var(--ink)', 'stroke-width': 1.6, 'stroke-dasharray': '6 5' }, g);
+    const ks = D.map(p => Kh('gau', st.q - p.x, st.h)), s0 = ks.reduce((a, b) => a + b, 0), w = ks.map(k => k / s0), wmax = Math.max(...w);
+    D.forEach((p, i) => el('circle', { cx: f.X(p.x), cy: f.Y(p.y), r: w[i] / wmax > .02 ? dotSize(w[i], wmax) : 2.3, fill: w[i] / wmax > .02 ? 'var(--mi)' : 'var(--muted)', 'fill-opacity': w[i] / wmax > .02 ? .3 + .6 * w[i] / wmax : .55 }, g));
+    el('path', { d: pathOf(gx.map((x, i) => [f.X(x), f.Y(S[i].mu)])), fill: 'none', stroke: 'var(--mi)', 'stroke-width': 2.6 }, g);
+    const q = stats(D, st.q), qx = f.X(st.q), sd = Math.sqrt(q.V);
+    el('line', { x1: qx, x2: qx, y1: f.T, y2: f.B, stroke: 'var(--ink)', 'stroke-dasharray': '4 4', opacity: .6 }, svg);
+    el('line', { x1: qx, x2: qx, y1: f.Y(q.mu - 2 * sd), y2: f.Y(q.mu + 2 * sd), stroke: 'var(--c3)', 'stroke-width': 4, 'stroke-linecap': 'round' }, g);
+    el('circle', { cx: qx, cy: f.Y(q.mu), r: 6, fill: 'var(--mi)', stroke: 'var(--surface)', 'stroke-width': 2 }, g);
+    txt(svg, qx + (st.q > 1 ? -6 : 6), f.T + 12, 'x* = ' + f2(st.q), 'lbl', { fill: 'var(--ink)', 'text-anchor': st.q > 1 ? 'end' : 'start' });
+
+    $('#vr-mu').textContent = f3(q.mu);
+    $('#vr-v').textContent = q.V.toFixed(4);
+    $('#vr-sd').textContent = (2 * sd).toFixed(3);
+    const s2 = st.sg * st.sg;
+    $('#vr-chain').innerHTML = `V[y | x*] = σ² + Σ wₙ yₙ² − µ²<br>= ${s2.toFixed(4)} + ${q.m2.toFixed(4)} − ${f3(q.mu)}²<br>= ${s2.toFixed(4)} + <span class="a">${(q.m2 - q.mu * q.mu).toFixed(4)}</span> = <span class="m">${q.V.toFixed(4)}</span><br>` +
+      `<span class="mu">the orange term is Σ wₙ (yₙ − µ)², the weighted spread of nearby outputs</span><br>` +
+      `true noise at x*: 2·sd = ${(2 * NOISE[st.d](st.q)).toFixed(3)} · estimate: 2·√V = ${(2 * sd).toFixed(3)}`;
+  }
+  const mv = p => { st.q = clamp(f.iX(p.x), -1.5, 1.5); render(); };
+  onDrag(svg, mv, mv);
+  segm('vr-d', b => { st.d = b.dataset.d; render(); });
+  slider('vr-h', v => v.toFixed(2), v => { st.h = v; render(); });
+  slider('vr-sg', v => v.toFixed(2), v => { st.sg = v; render(); });
+  $('#vr-new').addEventListener('click', () => { st.seed++; render(); });
+  render(); renderers.push(render);
+})();
+
+/* =====================================================================
+   16.3.5.3  Local constant (N-W) vs locally linear regression (Eqs. 16.46–16.47)
+   ===================================================================== */
+(function () {
+  const svg = $('#lw-svg');
+  const truth = x => .2 + 1.3 * x + .22 * Math.sin(7 * x);
+  const st = { k: 'tri', h: .3, un: false, q: .5, seed: 1 };
+  const N = 60;
+  const f = frame({ W: 440, H: 340, l: 40, r: 10, t: 10, b: 34, x: [-.05, 1.05], y: [-.3, 2] });
+  const gx = grid(0, 1, 301);
+  function data() { const r = rng(1700 + 13 * st.seed); return Array.from({ length: N }, () => { const x = r(); return { x, y: truth(x) + .12 * gauss(r) }; }); }
+  function fit(D, x) {
+    let S0 = 0, S1 = 0, S2 = 0, T0 = 0, T1 = 0;
+    for (const p of D) { const k = Kh(st.k, x - p.x, st.h); S0 += k; S1 += k * p.x; S2 += k * p.x * p.x; T0 += k * p.y; T1 += k * p.x * p.y; }
+    const det = S0 * S2 - S1 * S1, ok = S0 > 0 && det > 1e-9 * S0 * S0;
+    const b1 = ok ? (S0 * T1 - S1 * T0) / det : NaN, b0 = ok ? (T0 - b1 * S1) / S0 : NaN;
+    return { S0, S1, S2, T0, T1, b0, b1, nw: S0 > 0 ? T0 / S0 : NaN, ll: ok ? b0 + b1 * x : NaN, un: T0 / N };
+  }
+  function render() {
+    svg.innerHTML = '';
+    const D = data();
+    axes(svg, f, { xt: [0, .25, .5, .75, 1], yt: [0, .5, 1, 1.5, 2], fy: v => neg(v), xl: 'x' });
+    const g = clip(svg, f, 'lw-clip');
+    const F = gx.map(x => fit(D, x));
+    el('path', { d: pathOf(gx.map(x => [f.X(x), f.Y(truth(x))])), fill: 'none', stroke: 'var(--ink)', 'stroke-width': 1.6, 'stroke-dasharray': '6 5' }, g);
+    const q = fit(D, st.q);
+    const ks = D.map(p => Kh(st.k, st.q - p.x, st.h)), wmax = Math.max(...ks);
+    D.forEach((p, i) => el('circle', { cx: f.X(p.x), cy: f.Y(p.y), r: dotSize(ks[i], wmax || 1), fill: ks[i] > 0 ? 'var(--mi)' : 'var(--muted)', 'fill-opacity': ks[i] > 0 ? .25 + .55 * ks[i] / wmax : .5 }, g));
+    if (st.un) el('path', { d: pathNaN(gx.map((x, i) => [f.X(x), f.Y(F[i].un)])), fill: 'none', stroke: 'var(--c3)', 'stroke-width': 2, 'stroke-dasharray': '7 4' }, g);
+    el('path', { d: pathNaN(gx.map((x, i) => [f.X(x), f.Y(F[i].nw)])), fill: 'none', stroke: 'var(--c1)', 'stroke-width': 2.4 }, g);
+    el('path', { d: pathNaN(gx.map((x, i) => [f.X(x), f.Y(F[i].ll)])), fill: 'none', stroke: 'var(--mi)', 'stroke-width': 2.6 }, g);
+    const qx = f.X(st.q);
+    el('line', { x1: qx, x2: qx, y1: f.T, y2: f.B, stroke: 'var(--ink)', 'stroke-dasharray': '4 4', opacity: .6 }, svg);
+    if (isFinite(q.ll)) {
+      const hw = KER[st.k].compact ? st.h : 2 * st.h, a = Math.max(-.05, st.q - hw), b = Math.min(1.05, st.q + hw);
+      el('line', { x1: f.X(a), y1: f.Y(q.b0 + q.b1 * a), x2: f.X(b), y2: f.Y(q.b0 + q.b1 * b), stroke: 'var(--mi)', 'stroke-width': 5, opacity: .45, 'stroke-linecap': 'round' }, g);
+      el('circle', { cx: qx, cy: f.Y(q.ll), r: 6, fill: 'var(--mi)', stroke: 'var(--surface)', 'stroke-width': 2 }, g);
+    }
+    if (isFinite(q.nw)) el('circle', { cx: qx, cy: f.Y(q.nw), r: 6, fill: 'var(--c1)', stroke: 'var(--surface)', 'stroke-width': 2 }, g);
+    txt(svg, f.L + 8, f.T + 14, 'N-W (local constant)', 'lbl', { fill: 'var(--c1)' });
+    txt(svg, f.L + 8, f.T + 30, 'local linear', 'lbl', { fill: 'var(--mi)' });
+    if (st.un) txt(svg, f.L + 8, f.T + 46, 'Eq. 16.46 ÷ N = p̂(x)·µ(x)', 'lbl', { fill: 'var(--c3)' });
+
+    $('#lw-f').textContent = f3(truth(st.q));
+    $('#lw-nw').textContent = isFinite(q.nw) ? f3(q.nw) : '–';
+    $('#lw-ll').textContent = isFinite(q.ll) ? f3(q.ll) : '–';
+    $('#lw-chain').innerHTML = q.S0 > 0
+      ? `S₀ = ${f3(q.S0)}, S₁ = ${f3(q.S1)}, S₂ = ${f3(q.S2)}, T₀ = ${f3(q.T0)}, T₁ = ${f3(q.T1)}<br>` +
+        `<span style="color:var(--c1);font-weight:600">N-W:</span> T₀/S₀ = ${isFinite(q.nw) ? f3(q.nw) : '–'}<br>` +
+        (isFinite(q.ll) ? `<span class="m">line:</span> β₁ = (S₀T₁ − S₁T₀)/(S₀S₂ − S₁²) = ${f3(q.b1)}, β₀ = (T₀ − β₁S₁)/S₀ = ${f3(q.b0)}<br>µ(x*) = β₀ + β₁·x* = ${f3(q.b0)} + ${f3(q.b1)} · ${f2(st.q)} = <span class="m">${f3(q.ll)}</span>` : '<span class="bad">Fewer than two distinct points in the window: the line is undetermined.</span>')
+      : '<span class="bad">No points in the window: both estimates are undefined.</span>';
+    const mse = key => { let s = 0, n = 0; F.forEach((r, i) => { if (isFinite(r[key])) { s += (r[key] - truth(gx[i])) ** 2; n++; } }); return n ? s / n : NaN; };
+    $('#lw-mse-nw').textContent = mse('nw').toFixed(4);
+    $('#lw-mse-ll').textContent = mse('ll').toFixed(4);
+  }
+  const mv = p => { st.q = clamp(f.iX(p.x), 0, 1); render(); };
+  onDrag(svg, mv, mv);
+  segm('lw-k', b => { st.k = b.dataset.k; render(); });
+  slider('lw-h', v => v.toFixed(2), v => { st.h = v; render(); });
+  $('#lw-un').addEventListener('change', e => { st.un = e.target.checked; render(); });
+  $('#lw-new').addEventListener('click', () => { st.seed++; render(); });
+  $('#lw-edge').addEventListener('click', () => { st.q = 1; render(); });
+  render(); renderers.push(render);
+})();
+
+/* =====================================================================
+   Quizzes
+   ===================================================================== */
+const QUIZ = {
+  kernels: [
+    { l: 'Kid', q: 'You spread your scoop of sand twice as wide. What happens to the hill?', o: ['It gets about half as tall', 'It gets twice as tall', 'It stays the same height', 'Half the sand disappears'], a: 0, w: 'The amount of sand (the area) stays at 1, so a hill twice as wide is half as tall.' },
+    { l: 'HS', q: 'A boxcar kernel with bandwidth h = 2 is a rectangle from −2 to 2. How tall is it?', o: ['1/4', '1/2', '1', '2'], a: 0, w: 'Width 4 × height = 1, so the height is 1/4. That\'s (1/h)·K(0) = (1/2)(1/2).' },
+    { l: 'Undergrad', q: 'Why is ∫ x K(x) dx = 0 for a density kernel?', o: ['K is symmetric, so x K(x) is an odd function', 'K integrates to 1', 'K is never negative', 'K has compact support'], a: 0, w: 'K(−x) = K(x) makes (−x)K(−x) = −xK(x). The positive and negative halves cancel.' },
+    { l: 'Undergrad', q: 'Which kernel in Table 16.1 is compact, smooth, and differentiable at its boundaries?', o: ['Tri-cube', 'Epanechnikov', 'Boxcar', 'Gaussian'], a: 0, w: '(1 − |x|³)³ meets zero with zero slope at ±1. The Epanechnikov has slope ∓3/2 there; the Gaussian is not compact.' },
+    { l: 'Undergrad', q: 'The Epanechnikov kernel with h = 0.5. What is K_h(0)?', o: ['1.5', '0.75', '0.375', '3'], a: 0, w: 'K_h(0) = (1/h) K(0) = 2 × 0.75 = 1.5.' },
+    { l: 'Grad', q: 'The D-dimensional Gaussian kernel of Eq. 16.30 is the density of…', o: ['N(0, h²I)', 'N(0, hI)', 'N(0, I/h²)', 'a product of D boxcars'], a: 0, w: 'Each axis is N(0, h²), independent, so the product is N(0, h²I) with constant 1/(h^D (2π)^(D/2)).' }
+  ],
+  parzen: [
+    { l: 'Kid', q: 'You put a scoop of sand on every seashell. Where is the pile tallest?', o: ['Where lots of shells were close together', 'Where there were no shells', 'At the biggest shell', 'Always in the middle'], a: 0, w: 'Bumps that overlap add up, so crowded spots make the tallest piles.' },
+    { l: 'HS', q: 'Boxcar KDE with N = 10 and h = 0.5. Three data points lie within 0.5 of x. What is p(x)?', o: ['0.3', '0.15', '0.6', '3'], a: 0, w: 'Count / (N · 2h) = 3 / (10 · 1) = 0.3.' },
+    { l: 'Undergrad', q: 'Eq. 16.32 is a Gaussian mixture model with…', o: ['one component per data point, equal weights, shared variance σ²I', 'K components learned by EM', 'one component per class', 'weights proportional to distance'], a: 0, w: 'Set K = N and µₙ = xₙ in Eq. 16.31. Only σ is left to choose.' },
+    { l: 'Undergrad', q: 'How do you sample from a KDE?', o: ['Pick a training point at random, then add h·ε with ε drawn from K', 'Return the training point with the highest density', 'Average all training points', 'Draw from a Gaussian with the data\'s mean and variance'], a: 0, w: 'A KDE is an equal-weight mixture, so sample the component first, then sample within it.' },
+    { l: 'Undergrad', q: 'What is the main practical cost of KDE?', o: ['All N points must be stored, and each evaluation touches all of them', 'Training takes many EM iterations', 'It can only be used in 1-D', 'It needs labels'], a: 0, w: 'O(ND) memory and O(ND) per evaluation. There is no training step to speak of.' },
+    { l: 'Grad', q: 'The expected value of a KDE at x, over random datasets, is…', o: ['(K_h ∗ p)(x), the true density smoothed by the kernel', 'exactly p(x)', 'K_h(0)', '1/N'], a: 0, w: 'E p̂(x) = ∫ K_h(x − u) p(u) du. It is biased toward a flattened p, with bias ≈ (h²/2) µ₂(K) p″(x).' }
+  ],
+  bandwidth: [
+    { l: 'Kid', q: 'What happens if every scoop of sand is super narrow?', o: ['You get a tall spike at each shell and flat floor in between', 'One big smooth hill', 'No sand anywhere', 'The hills get wider'], a: 0, w: 'A tiny bandwidth copies the data exactly: that\'s overfitting.' },
+    { l: 'HS', q: 'Using h = σ (4/(3N))^(1/5) with σ = 1 and N = 100, h is about…', o: ['0.42', '1.06', '0.04', '0.013'], a: 0, w: '(4/300)^(0.2) = 0.01333^(0.2) ≈ 0.42.' },
+    { l: 'HS', q: 'By what factor must N grow to cut the rule-of-thumb h in half?', o: ['32', '2', '4', '10'], a: 0, w: 'h ∝ N^(−1/5), so halving h needs 2⁵ = 32 times the data.' },
+    { l: 'Undergrad', q: 'Data {1, 2, 3, 4, 100}. What is the robust σ̂ = 1.4826 · MAD?', o: ['about 1.48', 'about 43.6', 'about 3', 'about 20'], a: 0, w: 'Median 3; deviations {2, 1, 0, 1, 97}; their median is 1. The sample std (≈ 43.6) is wrecked by the 100.' },
+    { l: 'Undergrad', q: 'Per-dimension bandwidths h₁ = 0.2 and h₂ = 0.8. The book\'s combined h is…', o: ['0.4', '0.5', '0.16', '1.0'], a: 0, w: 'Geometric mean: √(0.2 · 0.8) = √0.16 = 0.4.' },
+    { l: 'Grad', q: 'On clearly bimodal data, the Gaussian rule of thumb tends to…', o: ['oversmooth and blur the two modes together', 'undersmooth into spikes', 'give the AMISE-optimal h exactly', 'fail to produce a number'], a: 0, w: 'It assumes a Gaussian truth (small R(p″)), so it picks too large an h when the truth has more curvature. Try "Two bumps" in the Play box.' }
+  ],
+  knn: [
+    { l: 'Kid', q: 'The balloon holds 10 marbles: 7 red, 3 blue. What do you guess?', o: ['Red, about 7-out-of-10 sure', 'Blue', 'Red, completely sure', 'You can\'t tell without the balloon\'s size'], a: 0, w: 'All the fancy terms cancel and you\'re left with the vote: 7/10.' },
+    { l: 'HS', q: 'Why doesn\'t the size of the balloon end up mattering for the prediction?', o: ['It\'s the same for every class, so it cancels when you compare', 'It\'s always 1', 'Balloons have no size', 'It only matters for even K'], a: 0, w: 'Each class\'s score has the same 1/(N·V(x)) factor.' },
+    { l: 'Undergrad', q: 'K = 10 and 7 of the points in the balloon are class c. What is p(y = c | x, D)?', o: ['0.7', '7/N_c', '0.07', '7/(N V)'], a: 0, w: 'Eq. 16.35: N_c(x)/K = 7/10.' },
+    { l: 'Undergrad', q: 'Which choice makes the class sizes N_c cancel in Eq. 16.35?', o: ['The prior p(y = c) = N_c / N', 'A uniform prior', 'Equal class sizes in the data', 'A Gaussian kernel'], a: 0, w: 'The 1/N_c in the density meets the N_c in the prior. With another prior, votes get reweighted.' },
+    { l: 'Undergrad', q: 'With a fixed-radius window instead of a balloon, what can go wrong?', o: ['The window can contain no points, so the posterior is 0/0', 'The posterior can be negative', 'K becomes larger than N', 'Nothing changes'], a: 0, w: 'The balloon always holds K points. Try "fixed radius" with a small r far from the data.' },
+    { l: 'Grad', q: 'The balloon density estimate K / (N V_K(x)) is…', o: ['not a proper density: it doesn\'t integrate to 1', 'always a proper density', 'the same as a Gaussian KDE', 'zero outside the data'], a: 0, w: 'In 1-D its tails decay like 1/|x|, so the integral diverges. Ratios of it are still fine for classification.' }
+  ],
+  nw: [
+    { l: 'Kid', q: 'To guess the temperature at your friend\'s house, which houses should matter most?', o: ['The ones right next door', 'The ones farthest away', 'All houses equally', 'Only the hottest house'], a: 0, w: 'The kernel gives close points big weights and far points small or zero weights.' },
+    { l: 'HS', q: 'Kernel values 2, 1, 1 for three points with y = 3, 0, 6. What is the prediction?', o: ['3', '9', '2.25', '4'], a: 0, w: 'Weights 0.5, 0.25, 0.25. 0.5·3 + 0.25·0 + 0.25·6 = 3.' },
+    { l: 'Undergrad', q: 'Which fact turns ∫ y K_h(y − yₙ) dy into yₙ in Eq. 16.38?', o: ['A symmetric kernel centered at yₙ has mean yₙ (Eq. 16.25)', 'The kernel integrates to 1', 'The kernel has compact support', 'yₙ is a constant'], a: 0, w: 'The denominator uses the other fact, ∫ K_h(y − yₙ) dy = 1.' },
+    { l: 'Undergrad', q: 'With a Gaussian kernel, as h becomes very large, µ(x) approaches…', o: ['the overall mean of the yₙ, at every x', 'the nearest neighbor\'s y', 'zero', 'a straight line through the data'], a: 0, w: 'All the weights become almost equal, 1/N each.' },
+    { l: 'Undergrad', q: 'Does the bandwidth of the y-kernel affect the N-W mean?', o: ['No, it integrates out completely', 'Yes, it multiplies the prediction', 'Yes, it shifts the prediction', 'Only for the boxcar'], a: 0, w: 'Only the x-kernel shows up in Eqs. 16.39–16.40. The y-kernel returns in the variance (§16.3.5.2).' },
+    { l: 'Grad', q: 'N-W regression is the solution of which local problem?', o: ['Weighted least squares with a constant: min over β₀ of Σ (yₙ − β₀)² K_h(x − xₙ)', 'Weighted least squares with a line', 'Unweighted least squares', 'Maximum likelihood with a GP prior'], a: 0, w: 'Setting the derivative to 0 gives β₀ = Σ K yₙ / Σ K. Local-linear (LOWESS) adds a slope.' }
+  ],
+  var: [
+    { l: 'Kid', q: 'When should the "how sure am I" range be wide?', o: ['When the nearby houses disagree', 'When they all agree', 'Always the same', 'Only at night'], a: 0, w: 'Disagreement among neighbors means more spread in what y could be.' },
+    { l: 'HS', q: 'σ² = 0.1, two neighbors with equal weight and y = 0 and y = 2. What is V[y | x]?', o: ['1.1', '1', '2.1', '0.1'], a: 0, w: 'µ = 1, Σ w y² = 2, so V = 0.1 + 2 − 1 = 1.1.' },
+    { l: 'Undergrad', q: '∫ y² N(y | yₙ, σ²) dy equals…', o: ['σ² + yₙ²', 'yₙ²', 'σ²', '(σ + yₙ)²'], a: 0, w: 'Second moment = variance + mean squared (Eq. 16.44).' },
+    { l: 'Undergrad', q: 'Why is Σ wₙ yₙ² − µ² never negative?', o: ['It equals Σ wₙ (yₙ − µ)², a weighted variance', 'Because σ² > 0', 'Because the weights are positive and sum to 2', 'It can be negative'], a: 0, w: 'Expand Σ wₙ (yₙ − µ)² using Σ wₙ = 1 and Σ wₙ yₙ = µ.' },
+    { l: 'Grad', q: 'Increasing the y-kernel σ changes…', o: ['only the variance, by the same amount everywhere', 'only the mean', 'both the mean and the variance', 'neither'], a: 0, w: 'σ² enters Eq. 16.45 as an additive constant and never appears in µ(x).' }
+  ],
+  loess: [
+    { l: 'Kid', q: 'At the very edge of the map, on a hill that goes up, what\'s the smarter way to guess the height?', o: ['Follow the slope of the nearby measurements', 'Average the nearby measurements', 'Guess zero', 'Use the highest measurement anywhere'], a: 0, w: 'The nearby points are all behind you and lower; following the slope fixes that.' },
+    { l: 'HS', q: 'With a rising trend, where do N-W and local linear disagree the most?', o: ['At the edges of the data', 'In the exact middle', 'Nowhere', 'Only where there\'s no noise'], a: 0, w: 'In the middle, neighbors are balanced on both sides. At an edge they\'re all on one side, and the average lags.' },
+    { l: 'Undergrad', q: 'In Eq. 16.47, replacing ϕ(x) = [1, x] with ϕ(x) = [1] gives…', o: ['Nadaraya-Watson regression', 'Ordinary linear regression', 'KNN classification', 'The KDE of the inputs'], a: 0, w: 'The one normal equation S₀β₀ = T₀ gives β₀ = Σ wₙ yₙ.' },
+    { l: 'Undergrad', q: 'Eq. 16.46 drops the denominator from N-W. What does it equal?', o: ['N · p̂(x) · µ(x): it sags where data are sparse', 'µ(x) exactly', 'the KDE p̂(x)', 'zero'], a: 0, w: 'Σ K_h(x − xₙ) = N p̂(x), so Σ yₙ K_h(x − xₙ) = N p̂(x) µ(x).' },
+    { l: 'Grad', q: 'Cleveland\'s LOWESS [CD88] typically uses…', o: ['a tri-cube kernel, a nearest-neighbor span, and robustness reweighting', 'a Gaussian kernel with a fixed h', 'a boxcar kernel and no weights', 'a neural network'], a: 0, w: 'The span sets h locally to cover a fixed fraction of the data; bisquare robustness weights downweight outliers.' }
+  ]
+};
+(function () {
+  $$('[data-quiz]').forEach(box => {
+    const qs = QUIZ[box.dataset.quiz]; SCORE.total += qs.length;
+    let local = 0;
+    // fixed per-question shuffle so the right answer isn't always in the same slot
+    const order = q => { let h = 0; for (const ch of q.q) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); const r = rng(h), ix = q.o.map((_, j) => j); for (let j = ix.length - 1; j > 0; j--) { const k = Math.floor(r() * (j + 1)); [ix[j], ix[k]] = [ix[k], ix[j]]; } return ix; };
+    function build() {
+      box.innerHTML = qs.map((q, i) => `<div class="qq" data-i="${i}"><p class="qt"><span class="qn">Q${i + 1}</span>${q.q}<span class="ql">${q.l}</span></p><div class="opts">${order(q).map(j => `<button class="opt" data-j="${j}">${q.o[j]}</button>`).join('')}</div></div>`).join('') +
+        `<div class="quizfoot"><span class="qs">0 / ${qs.length} correct</span><button class="b qreset">Reset these questions</button></div>`;
+    }
+    build();
+    box.addEventListener('click', e => {
+      if (e.target.closest('.qreset')) { SCORE.right -= local; local = 0; build(); SCORE.paint(); return; }
+      const b = e.target.closest('.opt'); if (!b || b.disabled) return;
+      const card = b.closest('.qq'), q = qs[+card.dataset.i], ok = +b.dataset.j === q.a;
+      $$('.opt', card).forEach(x => { x.disabled = true; if (+x.dataset.j === q.a) x.classList.add('right'); });
+      if (!ok) b.classList.add('wrong');
+      card.insertAdjacentHTML('beforeend', `<p class="why-ans"><b class="${ok ? 'ok' : 'no'}">${ok ? 'Correct.' : 'Not quite.'}</b> ${q.w}</p>`);
+      if (ok) { local++; SCORE.right++; }
+      $('.qs', box).textContent = `${local} / ${qs.length} correct`;
+      SCORE.paint();
+    });
+  });
+  SCORE.paint();
+})();
+
+/* ---------- Rail highlight + theme changes ---------- */
+(function () {
+  const links = $$('#rail a'), secs = links.map(a => $(a.getAttribute('href')));
+  const io = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting) links.forEach(l => l.classList.toggle('on', l.getAttribute('href') === '#' + e.target.id)); });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  secs.forEach(s => s && io.observe(s));
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => renderers.forEach(f => f()));
+})();
+})();
+</script>
+
+</body>
+</html>
